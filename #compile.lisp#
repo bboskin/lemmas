@@ -164,7 +164,7 @@ Expr := Number | t | nil
       (complete-recursion '(endpo-fn) dest (list res))))
    ((has-form 'zerop expr)
     (let ((e (miniKanrenize-go (cadr expr))))
-      (complete-recursion '(zeropo-fn)  dest(list e))))
+      (complete-recursion '(zeropo-fn)  dest (list e))))
    ;; recursion, user-defined functions
    ((consp expr)
     (let ((new-name (get-rel-name (car expr)))
@@ -195,7 +195,7 @@ Expr := Number | t | nil
 ;; let statements
 (defun miniKanrenize-let (lines vars work body)
   (cond
-   ((endp lines) `(fresh ,vars (,@work ,body)))
+   ((endp lines) `(fresh ,vars ,@work ,body))
    (t (let ((x (caar lines))
 	    (e (cadar lines)))
 	(miniKanrenize-let (cdr lines) `(,@vars ,x)
@@ -255,11 +255,11 @@ Expr := Number | t | nil
    ((has-form '> expr)
     (let ((e1 (miniKanrenize-go (cadr expr)))
 	  (e2 (miniKanrenize-go (caddr expr))))
-      (complete-recursion '(do-less-than-o) (list e2 e1))))
+      (complete-recursion-bool '(do-less-than-o) (list e2 e1))))
    ((has-form '>= expr)
     (let ((e1 (miniKanrenize-go (cadr expr)))
 	  (e2 (miniKanrenize-go (caddr expr))))
-      (complete-recursion '(do-less-than-equal-o) (list e2 e1))))
+      (complete-recursion-bool '(do-less-than-equal-o) (list e2 e1))))
    ;; boolean connectors
    ((has-form 'and expr)
     `(conj . ,(mapcar #'miniKanrenize-bool (cdr expr))))
