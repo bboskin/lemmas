@@ -1,0 +1,19 @@
+
+(defun fix-values (e)
+  (cond
+   ((booleanp e) e)
+   ((symbolp e) (build-sym e))
+   ((numberp e) (build-num e))
+   ((consp e)
+    `(cons ,(fix-values (car e))
+	   ,(fix-values (cdr e))))))
+
+
+(defun clean-expr (e)
+  (cond
+   ((numberp e) (build-num e))
+   ((symbolp e) e)
+   ((equal (car e) 'quote)
+    (fix-values (cadr e)))
+   (t (cons (clean-expr (car e))
+	    (clean-expr (cdr e))))))

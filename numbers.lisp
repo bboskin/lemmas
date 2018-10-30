@@ -299,52 +299,9 @@ lists of numerals or fresh variables.|#
 ;;; User forms
 
 (defun build-num (n)
-  (cons 'MK-NUMBER (build-num-in n)))
+  (cons 'INTERNAL-NUMBER (build-num-in n)))
 
 (defun read-back-num (n)
-  (if (and (consp n) (equal (car n) 'MK-NUMBER))
+  (if (and (consp n) (equal (car n) 'INTERNAL-NUMBER))
       (read-back-inner (cdr n))
     n))
-
-(defrel do-zeroo (n)
-  (== n '(MK-NUMBER)))
-
-(defrel do-pluso (n m o)
-  (fresh (a b c)
-	 (== n `(MK-NUMBER . ,a))
-	 (== m `(MK-NUMBER . ,b))
-	 (== o `(MK-NUMBER . ,c))
-	 (pluso a b c)))
-
-(defrel do-minuso (n m o)
-  (fresh (a b c)
-	 (== n `(MK-NUMBER . ,a))
-	 (== m `(MK-NUMBER . ,b))
-	 (== o `(MK-NUMBER . ,c))
-	 (minuso a b c)))
-
-(defrel do-timeso (n m o)
-  (fresh (a b c)
-	 (== n `(MK-NUMBER . ,a))
-	 (== m `(MK-NUMBER . ,b))
-	 (== o `(MK-NUMBER . ,c))
-	 (*o a b c)))
-
-(defrel do-expo (n m o)
-  (fresh (a b c)
-	 (== n `(MK-NUMBER . ,a))
-	 (== m `(MK-NUMBER . ,b))
-	 (== o `(MK-NUMBER . ,c))
-	 (expo a b c)))
-
-(defrel do-<o (n m)
-  (fresh (a b)
-	 (== n `(MK-NUMBER . ,a))
-	 (== m `(MK-NUMBER . ,b))
-	 (<o a b)))
-
-(defrel do-<=o (n m)
-  (fresh (a b)
-	 (== n `(MK-NUMBER . ,a))
-	 (== m `(MK-NUMBER . ,b))
-	 (<=o a b)))

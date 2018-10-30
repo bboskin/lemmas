@@ -32,9 +32,6 @@ does three things:
    ((endp ls) acc)
    (t (rev-acc (cdr ls) (cons (car ls) acc)))))
 
-(rev-acc '(1 2 3) nil)
-
-
 (run* q (rev-acc-rel '(1 2 3) nil q))
 
 (run 1 q (rev-acc-rel q nil '(3 2 1)))
@@ -54,13 +51,6 @@ does three things:
 
 (run 7 q (revt-rel q q))
 
-(NIL
- (_0)
- (_0 _0)
- (_0 _1 _0)
- (_0 _1 _1 _0)
- (_0 _1 _2 _1 _0)
- (_0 _1 _2 _2 _1 _0))
 
 ;; here's a first attempt, but our test suite wasn't good enough
 (suggest-lemma (revt (append a b))
@@ -78,14 +68,14 @@ does three things:
 ;; some more help
 (suggest-lemma (revt (append a b))
 	       ((revt b) a)
-	       (((a (1 2 3))
-		 (b (4 5 6)))))
+	       (((a (nil))
+		 (b (t)))))
 
 ; finally 
 (suggest-lemma (revt (append a b))
 	       ((revt b) (revt a))
-	       (((a (1 2 3))
-		 (b (4 5 6)))))
+	       (((a (nil))
+		 (b (t)))))
 
 ;;;;;;;;;
 ;; another classic example

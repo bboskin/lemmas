@@ -2,7 +2,15 @@
 (load "~/lemmas/mk.lisp")
 ;; When to stop early, used to prevent extra freshes from being introduced
 ;; (not used right now)
-(defun no-recur? (e) (symbolp e))
+
+(defun mk-nump (e)
+  (and (consp e)
+       (equal (car e)
+	      'MK-NUMBER)))
+
+(defun no-recur? (e)
+  (or (symbolp e)
+      (numberp e)))
 
 (defun miniKanrenize-bool (expr)
   (cond
@@ -37,7 +45,7 @@
 	  (new-var (next-var))
 	  (num (next-var)))
       `(fresh (,new-var ,num)
-	    (== (cons 'MK-NUM ,num) ,new-var)
+	    (== (cons 'MK-NUMBER ,num) ,new-var)
 	    ,(miniKanrenize e new-var))))
    ((and (consp expr)
 	 (equal (car expr) 'equal))
