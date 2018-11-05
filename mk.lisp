@@ -216,5 +216,115 @@
     ((symbolp ',xs)
      (let ((q (lvar ',xs)))
        (mymap (reify q)
-	       (run-goal ,n (conj ,gs)))))
+	      (run-goal ,n (conj ,gs)))))
     (t (run-more ,n ,xs ,gs))))
+
+;; code for condi = conde-include
+
+
+(defrel foo (e o)
+  (conde
+   ((== e '()) (== o 1))))
+
+
+
+
+
+#|
+Users can specify lines to use in two ways:
+-- giving specific forms to include/exclude
+-- assigning groups of lines, and suggesting to include/exclude groups
+|#
+
+(defun disj* (gs)
+  (cond
+   ((endp gs) (fail))
+   ((equal (length gs) 1) (apply (car gs) ()))
+   ((consp gs)
+    (disj2 (apply (car gs) ())
+	   (disj* (cdr gs))))))
+
+(defun conj* (gs)
+  (cond
+   ((endp gs) (succeed))
+   ((equal (length gs) 1) (apply (car gs) ()))
+   ((consp gs)
+    (conj2 (apply (car gs) ())
+	   (conj* (cdr gs))))))
+
+
+;; separates the include statements into 3 types:
+;; the list of lines that are to be included
+;; the list of groups whose lines should be included
+;; the list of expression forms to be included
+
+#|
+(defun exprs-symbols (lls)
+  (reduce #'append (mapcar #'expr-symbols lls)
+	  :initial-value nil
+	  :from-end t))
+
+(defun expr-symbols (ls)
+  (cond
+   ((symbolp ls) '(vars))
+   ((equal (car ls) 'INTERNAL-NUMBER) '(numbers))
+   ((equal (car ls) 'INTERNAL-SYMBOL) '(symbols))
+   ((equal (car ls) 'INTERNAL-CONS) '(pairs))
+   (t (cons (car ls) (exprs-symbols (cdr ls))))))
+
+(defmacro thunk-all (gs)
+  `(cond
+    ((endp ',gs) nil)
+    (t (cons (lambda () (conj ,(cdar gs)))
+	    (thunk-all ,(cdr gs))))))
+
+
+(defmacro run-condi (keep gs)
+  `(condi-help ,keep ,gs))
+
+(defmacro condi-help (keep gs)
+  `(cond
+   ((endp ',gs) (fail))
+   (t (if (member ,(caar gs) ,keep)
+	  (disj2 (conj ,(cdar gs))
+		 (run-condi ,keep ,(cdr gs)))
+	(run-condi ,keep ,(cdr gs))))))
+
+(defun select-lns (keepers all ths)
+  (cond
+   ((endp ths) nil)
+   ((member (car all) keepers)
+    (cons (car ths) (select-lns keepers (cdr all) (cdr ths))))
+   (t (select-lns keepers (cdr all) (cdr ths)))))
+
+;; gather lines from groups (gather-groups -> gg)
+(defun gg (gs)
+  (reduce #'append
+	  (mapcar #'(lambda (e) (apply e ())) gs)
+	  :initial-value nil))
+
+
+(defmacro call-condi-help (i g)
+  `(condi-help ,(eval i) ,g))
+
+(defmacro condi (all-gps includes &rest gs)
+  `(let* ((all-lns (mapcar #'car ',gs))
+	  (inc-gps (split-incs all-lns ',all-gps ',includes nil nil nil))
+	  (inc-lns (append (car inc-gps)
+			   (gg (cadr inc-gps))
+			   (exprs-symbols (caddr inc-gps)))))
+     (call-condi-help inc-lns ,gs)))
+#|
+(defrel foo (e o)
+  (condi
+   nil
+   (line2)
+   (line1 (== o 2))
+   (line2 (== o 1))))
+|#
+
+(defun gp1 () '(line2))
+
+
+(run 1 q )
+|#

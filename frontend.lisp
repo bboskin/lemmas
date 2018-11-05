@@ -1,15 +1,10 @@
 (load "~/lemmas/interp-acl2.lisp")
 
-
-
-;;; cleaning input expressions to conform to internal representations:
-
-
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; Forms to create valid expressions
 
 ;; add tags to quoted values, creating valid expressions
-(defun values->expressions (e)
+(defun fix-values (e)
   (cond
    ((booleanp e) e)
    ((symbolp e) (build-sym e))
@@ -28,8 +23,6 @@
     (fix-values (cadr e)))
    (t (cons (clean-expr (car e))
 	    (clean-expr (cdr e))))))
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; forms to create valid values from test cases (for environment)
@@ -86,12 +79,6 @@
 
 ;; suggest-lemma
 
-
-#|(defun do-lemma (start tests forms results)
-  (eval `(car (run 1 q (find-equivalent ',start ',forms q ',tests
-					',results)))))|#
-
-
 (defun subs (x v e)
   (cond
    ((equal e x) `',v)
@@ -106,9 +93,10 @@
 	     (v (cadar args))
 	     (new-form (subs var v form)))
 	(evaluate-in-substitution new-form (cdr args))))))
+
 (defun eval-all (start tests)
   (mapcar #'(lambda (e) (evaluate-in-substitution start e)) tests))
-
+#|
 (defmacro suggest-lemma (start forms tests)
   `(let* ((new-forms (clean-expr ',forms))
 	  (new-tests (mapcar #'clean-tests ',tests))
@@ -117,19 +105,225 @@
       (eval `(car (run 1 q (find-equivalent ',new-forms
 					    q
 					    ',new-tests
-					    ',results))))
-      ;(do-lemma new-start new-tests new-forms results)
-      )))
-
-#|
-(defmacro do-run (n q form)
-  (let ((v (clean-expression form)))
-     `(read-back (run ,n ,q ,v))))
-
-
-(do-lemma '(cons t nil) '(cons t nil) '() '(()))
-
-
-(run 1 q (find-equivalent '(cons t nil) '(cons t nil) q '(())
-					'((internal-cons t nil))))
+					    ',results)))))))
 |#
+
+(defun select-lns (keepers all ths)
+  (cond
+   ((endp ths) nil)
+   ((member (car all) keepers)
+    (cons (car ths) (select-lns keepers (cdr all) (cdr ths))))
+   (t (select-lns keepers (cdr all) (cdr ths)))))
+
+(defun gg (gs)
+  (reduce #'append
+	  (mapcar #'(lambda (e) (apply e ())) gs)
+	  :initial-value nil))
+
+(defun split-incs (all-lns all-gs ls lns gs exprs)
+  (cond
+   ((endp ls) (list lns gs exprs))
+   ((member (car ls) all-lns)
+    (split-incs all-lns all-gs (cdr ls) (cons (car ls) lns) gs exprs))
+   ((member (car ls) all-gs)
+    (split-incs all-lns all-gs (cdr ls) lns (cons (car ls) gs) exprs))
+   (t (split-incs all-lns all-gs (cdr ls) lns gs (cons (car ls) exprs)))))
+
+(defun expr-symbols (ls)
+  (cond
+   ((symbolp ls) '(var))
+   ((booleanp ls) '(boolean))
+   ((equal (car ls) 'INTERNAL-NUMBER) '(number))
+   ((equal (car ls) 'INTERNAL-SYMBOL) '(symbol))
+   ((equal (car ls) 'INTERNAL-CONS) '(cons))
+   (t (cons (car ls)
+	    (mapcar #'expr-symbols (cdr ls))))))
+
+(defun get-lines (forms all gps)
+  (let ((v (split-incs all gps forms nil nil nil)))
+    (let ((lines (car v))
+	  (group-lines (gg (cadr v)))
+	  (exprs (mapcar #'expr-symbols (caddr v))))
+      (append lines group-lines exprs))))
+
+(defun new-val-of (keep expr all)
+  (cond
+   ((endp expr) nil)
+   ((member (car all) keep)
+    (cons (car expr)
+	  (new-val-of keep (cdr expr) (cdr all))))
+   (t (new-val-of keep (cdr expr) (cdr all)))))
+
+
+
+
+(defun keywords ()
+  '(:required-expressions
+    :restrict
+    :exclude
+    :with))
+#|
+The keywords for suggest-lemma are:
+
+:required-forms <- These are the sub-expressions/forms that the 
+                    returned expression must include
+
+:exclude <- this tells the system to not 
+             permit certain forms to be in the expressions 
+             (can be forms and groups)
+
+:with <- this tells the system which forms can appear (can be forms and groups)
+
+:restrict (t/nil) <– default is nil. this says 
+           that ONLY forms from required-forms
+           can be used (if :with is also used, :restrict nil makes the :with pointless, and :restrict adds nothing to the :with clause|#
+
+(defun get-args (e)
+  (cond
+   ((endp e) (list nil nil))
+   ((member (car e) (keywords))
+    (list nil e))
+   (t (let ((v (get-args (cdr e))))
+	(list (cons (car e) (car v))
+	      (cadr v))))))
+
+(defun parse-xargs (xargs req excl with restr)
+  (cond
+   ((endp xargs) (values req excl with restr))
+   (t (let* ((kw (car xargs))
+	     (v (get-args (cdr xargs)))
+	     (args (car v))
+	     (rst (cadr v)))
+	(cond
+	 ((equal kw ':required-expressions)
+	  (if req (error "Two occurrences of :required-expressions")
+	    (parse-xargs rst args excl with restr)))
+	 ((equal kw ':exclude)
+	  (if excl (error "Two occurrences of :exclude")
+	    (parse-xargs rst req args with restr)))
+	 ((equal kw ':with)
+	  (if with (error "Two occurrences of :with")
+	    (parse-xargs rst req excl args restr)))
+	 (t (error "invalid keyword ~a" kw)))))))
+
+(defun except (l1 l2)
+  (cond
+   ((endp l1) nil)
+   ((member (car l1) l2)
+    (except (cdr l1) l2))
+   (t (cons (car l1) (except (cdr l1) l2)))))
+
+(defmacro suggest-lemma (start tests &rest xargs)
+  `(let* ((new-tests (mapcar #'clean-tests ',tests))
+	  (results (mapcar #'clean-val (eval-all ',start ',tests))))
+     (multiple-value-bind
+      (forms excl with restr)
+      (parse-xargs ',xargs nil nil nil nil)
+      (let* ((new-forms (clean-expr forms))
+	     (incs (if (not with)
+		       (if restr (expr-symbols new-forms) (all-lines))
+		     (cons 'var (get-lines with (all-lines) (all-groups)))))
+	     (excs (if (not excl) nil
+		       (get-lines excl (all-lines) (all-groups))))
+	     (lns (except incs excs))
+	     (new-e (new-val-of lns
+				(cdr (expr-for-value-of))
+				(all-lines))))
+	(progn
+	  (eval `(defrel value-of (expr ρ o)
+		   (conde . ,new-e)))
+	  (read-back
+	   (eval `(car (run 1 q (find-equivalent ',new-forms
+						 q
+						 ',new-tests
+						 ',results))))))))))
+#|
+(defmacro suggest-lemma (start forms tests &rest lngps)
+  `(let* ((new-forms (clean-expr ',forms))
+	  (new-tests (mapcar #'clean-tests ',tests))
+	  (results (mapcar #'clean-val (eval-all ',start ',tests)))
+          (lns (if ',lngps
+		   (cons 'var (get-lines ',lngps (all-lines) (all-groups)))
+		 (all-lines)))
+	  (new-e (new-val-of lns
+			     (cdr (expr-for-value-of))
+			     (all-lines))))
+     (progn
+       (eval `(defrel value-of (expr ρ o)
+		(conde . ,new-e)))
+       (read-back
+	(eval `(car (run 1 q (find-equivalent ',new-forms
+					      q
+					      ',new-tests
+					      ',results)))))))
+|#
+
+
+
+(defun all-lines ()
+  '(var
+    boolean symbol number cons
+    + - * exp < <= > >=
+    car cdr append reverse
+    let))
+
+(defun all-groups () '(all-lines))
+      
+;; organizing expression forms into groups
+
+(defmacro defgroup (name &rest expressions)
+  `(progn
+     (defun ,name () ',expressions)
+     (let ((gs (all-groups)))
+       (defun all-groups ()
+	 (cons ',name gs)))))
+
+(defmacro add-to-group (name &rest expressions)
+  (let ((e (apply name ())))
+    `(defun ,name ()
+       (append ',expressions ',e))))
+
+;;;;;;;;;;;;;;;
+
+(defgroup list-ops append reverse)
+
+(suggest-lemma (reverse (append a b))
+	       (((a (1 2))
+		 (b (3 4))))
+	       :required-expressions (reverse b) (reverse a)
+	       :with list-ops)
+
+(defun2 rev-acc (ls acc)
+  (cond
+   ((endp ls) acc)
+   (t (rev-acc (cdr ls) (cons (car ls) acc)))))
+
+(suggest-lemma (rev-acc ls acc)
+	       (((ls (1 2))
+		 (acc (4 5 6))))
+	       :required-expressions reverse ls
+	       :with list-ops)
+
+(add-to-group list-ops rev-acc)
+
+(suggest-lemma (rev-acc ls acc)
+	       (((ls (1 2))
+		 (acc (4 5 6))))
+	       :required-expressions reverse ls
+	       :with list-ops
+	       :exclude rev-acc)
+
+(suggest-lemma (rev-acc ls acc)
+	       (((ls (1 2))
+		 (acc (4 5 6))))
+	       :required-expressions (reverse ls)
+	       :with list-ops)
+
+
+
+
+(suggest-lemma (rev-acc ls acc)
+	       (((ls (1 2))
+		 (acc (4 5 6))))
+	       :required-expressions (reverse ls)
+	       :with list-ops)

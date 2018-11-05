@@ -4,7 +4,19 @@
 (load "~/lemmas/compile.lisp")
 (load "~/lemmas/relational-primitives.lisp")
 
+
+
+#|
+(add-include-book-dir :acl2s-modes "~/books/acl2s/")
+(ld "acl2s-mode.lsp" :dir :acl2s-modes)
+(acl2s-defaults :set verbosity-level 1)
+(reset-prehistory t)
+(in-package "ACL2S")
+|#
+
+
 ;; Environments
+
 (defrel lookupo (y ρ o)
   (conde
    ((fresh (d)
@@ -30,6 +42,13 @@
 	   (extend-env ρ x v rho)
 	   (do-let es rho new-ρ)))))
 
+(defun all-lines ()
+  '(var
+    boolean symbol number cons
+    + - * exp < <= > >=
+    car cdr append reverse
+    let))
+
 (defun expr-for-value-of ()
   '(conde
     ;; environment lookup
@@ -44,7 +63,6 @@
 	    (value-of a ρ res1)
 	    (value-of d ρ res2)))
     ;; Arithmetic
-    #|
     ((fresh (n m n-res m-res)
 	    (== expr `(+ ,n ,m))
 	    (value-of n ρ n-res)
@@ -85,7 +103,6 @@
 	    (value-of n ρ n-res)
 	    (value-of m ρ m-res)
 	    (do-less-than-equal-o-fn m-res n-res o)))
-|#
     ;; list stuff
     ((fresh (pr res)
 	    (== expr `(car ,pr))
@@ -109,12 +126,14 @@
 	    (do-let es ρ new-ρ)
 	    (value-of b new-ρ o)))))
 
-(defmacro redefine-interp ()
-  `(defrel value-of (expr ρ o)
-     ,(expr-for-value-of)))
+(defmacro reset-interp ()
+  `(progn
+     (defrel value-of (expr ρ o)
+       ,(expr-for-value-of))
+     (defun all-lines ()
+       ,(all-lines))))
 
-(redefine-interp)
-
+(reset-interp)
 ;;;;; Creating new clauses for relational ACL2s interpreter
 
 
@@ -134,10 +153,13 @@
 (defun add-to-interpreter (name rel-name num-args)
   (let ((new-clause
 	 (new-clause num-args nil `(list ',name) nil `(,rel-name)))
-	(current-interp (expr-for-value-of)))
+	(current-interp (expr-for-value-of))
+	(current-lines (all-lines)))
     (progn
       (defun expr-for-value-of ()
 	(append current-interp (list new-clause)))
+      (defun all-lines ()
+	(append current-lines (list name)))
       (eval `(defrel value-of (expr ρ o)
 	      ,(expr-for-value-of))))))
 

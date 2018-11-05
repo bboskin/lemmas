@@ -171,6 +171,7 @@
 	       (isort ls)
 	       (((ls (1 2)))))
 
+
 (suggest-lemma (qsort ls)
 	       (append (isort (less (car ls) (cdr ls)))
 		       cons
