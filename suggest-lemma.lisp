@@ -1,40 +1,63 @@
 (load "interp.lisp")
 (load "defunc2.lisp")
-
+(load "to-acl2.lisp")
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; Forms to create valid expressions
+
+;; creating numbers. All numbers are coerced into being natural numbers,
+;; and in addition all non-number, non-symbol, non-boolean atoms are coerced
+;; into being natural numbers. This may change later, but may not.
+
+(defun fix-atom (e)
+  (cond
+   ((symbolp e) e)
+   ((acl2-numberp e)
+    (cond
+     ((integerp e) (build-num (abs e)))
+     ((rationalp e) (build-num (denominator e)))
+     (t (build-num (random 10)))))
+   (t (build-num (random 10)))))
+
 
 ;; add tags to quoted values, creating valid expressions
 (defun fix-values (e)
   (cond
-   ((booleanp e) e)
-   ((symbolp e) (build-sym e))
-   ((numberp e) (build-num e))
    ((consp e)
     `(cons ,(fix-values (car e))
-	   ,(fix-values (cdr e))))))
+	   ,(fix-values (cdr e))))
+   ((booleanp e) e)
+   ((symbolp e) (build-sym e))
+   (t (fix-atom e))))
 
 ;; take input expressions, find quoted terms (and numbers), and fix.
 ;; uses values->expressions under quote, and otherwise only changes numbers
 (defun clean-expr (e)
   (cond
-   ((numberp e) (build-num e))
-   ((symbolp e) e)
-   ((equal (car e) 'quote)
-    (fix-values (cadr e)))
+   ((not (consp e)) (fix-atom e))
+   ((equal (car e) 'quote) (fix-values (cadr e)))
    (t (cons (clean-expr (car e))
 	    (clean-expr (cdr e))))))
+
+(defun unquote-tests (es)
+  (cond
+   ((endp es) nil)
+   (t (let ((x (caar es))
+	    (a (cadar es))
+	    (rst (unquote-tests (cdr es))))
+	(if (and (consp a) (equal (car a) 'quote))
+	    `((,x ,(cadr a)) . ,rst)
+	  `((,x ,a) . ,rst))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; forms to create valid values from test cases (for environment)
 (defun clean-val (exp)
   (cond
-   ((numberp exp) (build-num exp))
-   ((booleanp exp) exp)
-   ((symbolp exp) (build-sym exp))
+   ((not (consp exp)) (fix-atom exp))
+   ((equal (car exp) 'quote)
+    (clean-val (cadr exp)))
    ((consp exp)
-    (list 'INTERNAL-CONS (clean-val (car exp))
-	  (clean-val (cdr exp))))))
+       (list 'INTERNAL-CONS (clean-val (car exp))
+	     (clean-val (cdr exp))))))
 
 (defun clean-tests (alist)
   (cond
@@ -61,12 +84,13 @@
        (t (cons (read-back tag)
 		(read-back (cdr v)))))))))
 
-
-
-
 ;;;; To get hypotheses
-(defun make-or (e)
-  (if (> (length e) 1) `(or . ,e) (car e)))
+(defun make-ex (e tag)
+  (if (> (length e) 1)
+      `(,tag . ,e) (car e)))
+
+(defun hyps->ex (h)
+  (make-ex (mapcar #'(lambda (e) (make-ex e 'or)) h) 'and))
 
 (defun get-hyps (form)
   (mv-let
@@ -76,12 +100,7 @@
 		  nil nil
 		  'top-level
 		  state))
-   (let* ((res (cadr (cadr (cadr cx?))))
-	  (ors (mapcar #'make-or res)))
-     #|(if (> (length ors) 1)
-	 `(and . ,ors)
-     (car ors))|#
-     res)))
+   (hyps->ex (cadr (cadr (cadr cx?))))))
 
 ;; suggest-lemma
 
@@ -132,13 +151,15 @@
    ((equal (car ls) 'INTERNAL-SYMBOL) '(symbol))
    ((equal (car ls) 'INTERNAL-CONS) '(cons))
    (t (cons (car ls)
-	    (mapcar #'expr-symbols (cdr ls))))))
+	    (reduce #'append (mapcar #'expr-symbols (cdr ls))
+		    :initial-value nil)))))
 
 (defun get-lines (forms all gps)
   (let ((v (split-incs all gps forms nil nil nil)))
     (let ((lines (car v))
 	  (group-lines (gg (cadr v)))
-	  (exprs (mapcar #'expr-symbols (caddr v))))
+	  (exprs (reduce #'append (mapcar #'expr-symbols (caddr v))
+			 :initial-value nil)))
       (append lines group-lines exprs))))
 
 (defun new-val-of (keep expr all)
@@ -151,10 +172,9 @@
 
 (defun keywords ()
   '(:required-expressions
-    :restrict
     :exclude
     :with
-    :hypotheses))
+    :hyps))
 #|
 The keywords for suggest-lemma are:
 
@@ -180,9 +200,9 @@ The keywords for suggest-lemma are:
 	(list (cons (car e) (car v))
 	      (cadr v))))))
 
-(defun parse-xargs (xargs req excl with restr hyps)
+(defun parse-xargs (xargs req excl with hyps)
   (cond
-   ((endp xargs) (values req excl with restr hyps))
+   ((endp xargs) (values req excl with hyps))
    (t (let* ((kw (car xargs))
 	     (v (get-args (cdr xargs)))
 	     (args (car v))
@@ -190,16 +210,16 @@ The keywords for suggest-lemma are:
 	(cond
 	 ((equal kw ':required-expressions)
 	  (if req (error "Two occurrences of :required-expressions")
-	    (parse-xargs rst args excl with restr hyps)))
+	    (parse-xargs rst args excl with hyps)))
 	 ((equal kw ':exclude)
 	  (if excl (error "Two occurrences of :exclude")
-	    (parse-xargs rst req args with restr hyps)))
-	 ((equal kw ':hypotheses)
+	    (parse-xargs rst req args with hyps)))
+	 ((equal kw ':hyps)
 	  (if hyps (error "Two occurrences of :exclude")
-	    (parse-xargs rst req args with restr args)))
+	    (parse-xargs rst req excl with args)))
 	 ((equal kw ':with)
 	  (if with (error "Two occurrences of :with")
-	    (parse-xargs rst req excl args restr hyps)))
+	    (parse-xargs rst req excl args hyps)))
 	 (t (error "invalid keyword ~a" kw)))))))
 
 (defun except (l1 l2)
@@ -209,41 +229,93 @@ The keywords for suggest-lemma are:
     (except (cdr l1) l2))
    (t (cons (car l1) (except (cdr l1) l2)))))
 
-(defmacro suggest-lemma (start tests &rest xargs)
-  `(let* ((new-tests (mapcar #'clean-tests ',tests))
-	  (results (mapcar #'clean-val (eval-all ',start ',tests)))
-	  (contract-hyps (get-hyps ',start)))
-     (multiple-value-bind
-      (forms excl with restr hyps)
-      (parse-xargs ',xargs nil nil nil nil nil)
-      (let* ((new-forms (clean-expr forms))
-	     (incs (if (not with)
-		       (if restr (expr-symbols new-forms) (all-lines))
-		     (cons 'var (get-lines with (all-lines) (all-groups)))))
-	     (excs (if (not excl) nil
-		       (get-lines excl (all-lines) (all-groups))))
-	     (lns (except incs excs))
-	     (new-e (new-val-of lns
-				(cdr (expr-for-value-of))
-				(all-lines))))
-	(progn
-	  (eval `(defrel value-of (expr ρ o)
-		   (conde . ,new-e)))
-	  (let ((form
-		 (read-back
-		  (eval `(car (run 1 q (find-equivalent ',new-forms
-							q
-							',new-tests
-							',results)))))))
-	    `(implies ,(append contract-hyps hyps)
-		      (equal ,',start ,form))))))))
+(defun test-gen (hyps)
+  (mv-let
+   (cx? v state)
+   (acl2s-query `(acl2s::itest? (implies ,hyps nil)))
+   (cdr (cadadr cx?))))
+
+
+(defun suggest-lemma-loop (i forms hyps start tests)
+  (let* ((new-tests (mapcar #'clean-tests tests))
+	 (results (mapcar #'clean-val
+			  (eval-all start
+				    (mapcar #'unquote-tests tests))))
+	 (hyps (hyps->ex (append (mapcar #'list hyps)
+			 	 #|(get-hyps ',start)|#))))
+    (let ((form
+	   (read-back
+	    (eval `(car (run 1 q (find-equivalent ',forms
+						  q
+						  ',new-tests
+						  ',results)))))))
+      `(implies ,hyps (equal ,start ,form))
+      (mv-let
+       (cx? v state)
+       (acl2s-query `(acl2s::itest? (implies ,hyps (equal ,start ,form))))
+       (if (not (caadr cx?))
+	   (list "FOUND:" `(implies ,hyps (equal ,start ,form)) "IN" i "TRIES!")
+	 (suggest-lemma-loop (+ i 1) forms hyps start (append (cdr (cadadr cx?)) tests)))))))
+
+(defmacro suggest-lemma (start &rest xargs)
+  `(multiple-value-bind
+    (forms excl with hyps)
+    (parse-xargs ',xargs nil nil nil nil)
+    (let* (;;setting up the evaluator
+	   (new-forms (clean-expr forms))
+	   (req (get-lines new-forms (all-lines) (all-groups)))
+	   (incs (if (not with) req
+		   (cons 'var (get-lines with (all-lines) (all-groups)))))
+	   (excs (if (not excl) nil
+		   (get-lines excl (all-lines) (all-groups))))
+	   (lns (append req (except incs excs)))
+	   (new-e (new-val-of lns
+			      (cdr (expr-for-value-of))
+			      (all-lines))))
+      (progn (eval `(defrel value-of (expr ρ o)
+		      (conde . ,new-e)))
+	     (suggest-lemma-loop 1 new-forms hyps ',start (test-gen `(and . ,hyps))
+	 )))))
+
+
+#|
+(defmacro suggest-lemma (start &rest xargs)
+  `(multiple-value-bind
+    (forms excl with hyps)
+    (parse-xargs ',xargs nil nil nil nil)
+    (let* ((tests (test-gen `(and . ,hyps)))
+	   (new-tests (mapcar #'clean-tests tests))
+	   (results (mapcar #'clean-val (eval-all ',start (mapcar #'unquote-tests tests))))
+	   (hyps (hyps->ex (append (mapcar #'list hyps) #|(get-hyps ',start)|#)))
+	   (new-forms (clean-expr forms))
+	   (req (get-lines new-forms (all-lines) (all-groups)))
+	   (incs (if (not with)
+		     req
+		   (cons 'var (get-lines with (all-lines) (all-groups)))))
+	   (excs (if (not excl) nil
+		   (get-lines excl (all-lines) (all-groups))))
+	   (lns (append req (except incs excs)))
+	   (new-e (new-val-of lns
+			      (cdr (expr-for-value-of))
+			      (all-lines))))
+      (progn
+	(eval `(defrel value-of (expr ρ o)
+		 (conde . ,new-e)))
+	(let ((form
+	       (read-back
+		(eval `(car (run 1 q (find-equivalent ',new-forms
+						      q
+						      ',new-tests
+						      ',results)))))))
+	  `(implies ,hyps (equal ,',start ,form)))))))
+|#
 
 (defun all-lines ()
-  '(var
-    boolean symbol number cons
-    + - * exp < <= > >=
-    car cdr append reverse
-    let))
+  (list 'var
+    'boolean 'symbol 'number 'cons
+    '+ '- '* 'exp '< '<= '> '>=
+    'car 'cdr 'append 'reverse
+    'let))
 
 (defun all-groups () '(all-lines))
       
@@ -261,53 +333,4 @@ The keywords for suggest-lemma are:
     `(defun ,name ()
        (append ',expressions ',e))))
 
-;;;;;;;;;;;;;;;
 
-(defgroup list-ops append reverse)
-
-(suggest-lemma (reverse (append a b))
-	       (((a (1 2))
-		 (b (3 4))))
-	       :required-expressions (reverse b) (reverse a)
-	       :with list-ops)
-#|
-(IMPLIES (AND (TRUE-LISTP A)
-	      (OR (TRUE-LISTP (BINARY-APPEND A B))
-		  (STRINGP (BINARY-APPEND A B))))
-	 (EQUAL (REVERSE (APPEND A B))
-		(APPEND (REVERSE B) (REVERSE A))))
-|#
-
-(defunc2 rev-acc (ls acc)
-  :input-contract (and (true-listp ls) (true-listp acc))
-  :output-contract t
-  (cond
-   ((endp ls) acc)
-   (t (rev-acc (cdr ls) (cons (car ls) acc)))))
-
-(suggest-lemma (rev-acc ls acc)
-	       (((ls (1 2))
-		 (acc (4 5 6))))
-	       :required-expressions reverse ls
-	       :with list-ops)
-
-(add-to-group list-ops rev-acc)
-
-(suggest-lemma (rev-acc ls acc)
-	       (((ls (1 2))
-		 (acc (4 5 6))))
-	       :required-expressions reverse ls
-	       :with list-ops
-	       :exclude rev-acc)
-
-(suggest-lemma (rev-acc ls acc)
-	       (((ls (1 2))
-		 (acc (4 5 6))))
-	       :required-expressions (reverse ls)
-	       :with list-ops)
-
-(suggest-lemma (rev-acc ls acc)
-	       (((ls (1 2))
-		 (acc (4 5 6))))
-	       :required-expressions (reverse ls)
-	       :with list-ops)

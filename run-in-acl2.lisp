@@ -1,0 +1,10 @@
+(defttag t)
+(acl2::include-raw "suggest-lemma")
+
+(defgroup list-ops append reverse)
+
+(suggest-lemma (reverse (append a b))
+	       (((a (1 2))
+		 (b (3 4))))
+	       :required-expressions (reverse b) (reverse a)
+	       :with list-ops)
