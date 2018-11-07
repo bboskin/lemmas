@@ -1,6 +1,6 @@
-(load "~/lemmas/interp-acl2.lisp")
-(load "~/lemmas/mk.lisp")
-(load "~/lemmas/frontend.lisp")
+(load "interp.lisp")
+(load "defunc2.lisp")
+(load "suggest-lemma.lisp")
 
 ;; tests to just the interpreter
 (read-back (run* q (value-of '(cons t nil) '() q)))

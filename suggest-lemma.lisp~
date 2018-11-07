@@ -1,4 +1,4 @@
-(load "~/lemmas/interp.lisp")
+(load "~/lemmas/interp-acl2.lisp")
 (load "~/lemmas/defunc2.lisp")
 
 ;;;;;;;;;;;;;;;;;;;;;;

@@ -1,5 +1,5 @@
-(load "~/lemmas/interp.lisp")
-(load "~/lemmas/defunc2.lisp")
+(load "interp.lisp")
+(load "defunc2.lisp")
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; Forms to create valid expressions

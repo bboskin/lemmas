@@ -1,9 +1,0 @@
-#|Primitives used in the ACL2s->miniKanren compiler|#
-
-(defrel conso (a d o) (== o `(,a . ,d)))
-
-(defrel caro (pr a) (fresh (d) (conso a d pr)))
-
-(defrel cdro (pr d) (fresh (a) (conso a d pr)))
-
-(defrel )

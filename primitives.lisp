@@ -1,6 +1,6 @@
 #|Primitives used in the ACL2s->miniKanren compiler|#
-(load "~/lemmas/mk.lisp")
-(load "~/lemmas/numbers.lisp")
+(load "mk.lisp")
+(load "numbers.lisp")
 
 #|
 There are three explicit types here, denoted within the interpreter with tags

@@ -1,6 +1,6 @@
 :q
 
-(load "interp-acl2.lisp")
+(load "interp.lisp")
 
 
 #|

@@ -1,119 +1,73 @@
-(defun add-constraint (name c vars)
+#|A framework for performing contract completion|#
+(load "~/lemmas/with-acl2.lisp")
+
+
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;
+
+(acl2s-query '(defun fn-append (a b) (append a b)))
+(acl2s-query '(defun fn-reverse (a) (reverse a)))
+(acl2s-query '(defun fn-car (a) (car a)))
+(acl2s-query '(defun fn-cdr (a) (cdr a)))
+(acl2s-query '(defun fn-+ (a b) (+ a b)))
+(acl2s-query '(defun fn-- (a b) (- a b)))
+(acl2s-query '(defun fn-* (a b) (* a b)))
+
+(defun fn-names ()
+  '((append  acl2s::fn-append)
+    (reverse acl2s::fn-reverse)
+    (car     acl2s::fn-car)
+    (cdr     acl2s::fn-cdr)
+    (+       fn-+)
+    (-       fn--)
+    (*       fn-*)))
+
+(defun replace-function (f)
+  (let ((g (assoc f (fn-names))))
+    (if (consp g) (cadr g) f)))
+
+(defun convert-to-functions (f)
   (cond
-   ((equal (caar vars) name)
-    (cons (list (cons name (cons c (cadar vars))))
-	  (cdr vars)))
-   (t (cons (car vars) (add-constraint name c (cdr vars))))))
-
-(defun decide-cons-type-car (p? l? e)
-  (cond
-   (p? (cadr e))
-   (l? (cadr e))
-   (t 'any)))
-
-(defun decide-cons-type-cdr (p? l? e)
-  (cond
-   (p? (cadr e))
-   (l? (caddr e))
-   (t 'any)))
-
-(defun collect-constraints (expr vars ty-req)
-  (cond
-   ((numberp expr) vars)
-   ((equal expr 't) vars)
-   ((equal expr 'nil) vars)
-   ((assoc expr vars)
-    (if (equal ty-req 'any) vars
-      (add-constraint expr ty-req vars)))
-   ((equal (car expr) 'cons)
-    (let* ((pair? (and (consp ty-req) (equal (car ty-req) 'pair)))
-	   (list? (and (consp ty-req) (equal (car ty-req) 'listof)))
-	   (res1-req (decide-cons-type-car pair? list? ty-req))
-	   (res2-req (decide-cons-type-cdr pair? list? ty-req)))
-      (let ((res1 (collect-constraints (cadr expr) vars res1-req)))
-	(collect-constraints (caddr expr) res1 res2-req))))
-   ((equal (car expr) 'car)
-    (collect-constraints (cadr expr) vars `(pair ,ty-req any)))
-   ((equal (car expr) 'cdr)
-    (collect-constraints (cadr expr) vars `(pair any ,ty-req)))
-   ((equal (car expr) 'append)
-    (let ((res1 (collect-constraints (cadr expr) vars '(listof any))))
-      (collect-constraints (caddr expr) res1 'any)))
-   ((equal (car expr) 'reverse)
-    (collect-constraints (cadr expr) vars '(listof any)))
-   ((or (equal (car expr) '+) (equal (car expr) '*))
-    (and (equal ty-req 'nat)
-	 (let ((res1 (collect-constraints (cadr expr) vars 'nat)))
-	   (collect-constraints (caddr expr) res1 'nat))))))
+    ((booleanp f) f)
+    ((numberp f) f)
+    ((symbolp f) (replace-function f))
+    ((and (consp f)
+	  (equal (car f) 'quote))
+     f)
+    (t
+     (cons (convert-to-functions (car f))
+	   (convert-to-functions (cdr f))))))
 
 
 
+;;;;;;;;;;;;;
 
 
+(defun make-or (e)
+  (if (> (length e) 1) `(or . ,e) (car e)))
 
-
-
-
-
-
-
-
-(defrel membero (x ls)
-  (fresh (a d)
-	 (== ls `(,a . ,d))
-	 (conde
-	  ((== x a))
-	  ((membero x d)))))
-
-
+(defun get-hyps (form)
+  (mv-let
+   (cx? e state)
+   (acl2s-query `(acl2s::guard-obligation
+		  ',form
+		  nil nil
+		  'top-level
+		  state))
+   (let* ((res (cadr (cadr (cadr cx?))))
+	  (ors (mapcar #'make-or res)))
+     (if (> (length ors) 1)
+	 `(and . ,ors)
+       (car ors)))))
 
 #|
-Cons, Car, Cdr, Append, Reverse
-And, Or
-Cond
+(acl2s-query '(acl2s::defun foo44 (e)
+			    (declare (xargs :guard (consp e)))
+			     (car e)))
+
+(get-hyps '(append (foo44 e) 4))
 |#
-
-(defrel typeo (ty)
-  (conde
-   ((== ty 'All))
-   ((== ty 'Nat))
-   ((== ty 'Boolean))
-   ((fresh (a d)
-	   (== ty `(Pair ,a ,d))
-	   (typeo a)
-	   (typeo d)))
-   ((fresh (a)
-	   (== ty '(Listof ,a))
-	   (typeo a)))))
-
-;;;;;;;;;;;;;;;;;;;;;;
-;; Type inference
-
-(defrel ty-is-tlp? (ty)
-  (conde
-   ((== ty 'List))
-   ((fresh (a d)
-	   (== ty `(Pair ,a ,d))
-	   (ty-is-tlp d)))))
-
-(defrel type-of (e var ty)
-  (conde
-   ((== e var))
-   ((== e 't) (== ty 'Boolean))
-   ((== e 'nil)
-    (conde
-     ((== ty 'Boolean)
-      (fresh (e) (== ty 'List)))))
-   ((fresh (a d ty-a ty-d ty-a ty-b)
-	   (== e `(cons ,a ,d))
-	   (== ty `(Pair ,ty-a ,ty-b))
-	   (type-of a ty-a)
-	   (type-of a ty-d)))
-   ((fresh (pr ty-cdr)
-	   (== e `(car ,pr))
-	   (type-of pr `(Pair ,ty ,ty-cdr))))
-   ((fresh (pr ty-car)
-	   (== e `(cdr ,pr))
-	   (type-of pr `(Pair ,ty-car ,ty))))
-   ((fresh (== e '(cond))
-	   (type-of 'nil vars ty)))))

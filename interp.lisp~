@@ -1,19 +1,4 @@
-(load "~/lemmas/mk.lisp")
-(load "~/lemmas/numbers.lisp")
-(load "~/lemmas/helpers.lisp")
-(load "~/lemmas/compile.lisp")
 (load "~/lemmas/relational-primitives.lisp")
-
-
-
-#|
-(add-include-book-dir :acl2s-modes "~/books/acl2s/")
-(ld "acl2s-mode.lsp" :dir :acl2s-modes)
-(acl2s-defaults :set verbosity-level 1)
-(reset-prehistory t)
-(in-package "ACL2S")
-|#
-
 
 ;; Environments
 
@@ -30,7 +15,6 @@
 
 ;; The Interpreter with helpers
 
-
 ;; let actually has the semantics of let*
 ;; for proposed expressions. This is OK for now.
 (defrel do-let (es ρ new-ρ)
@@ -41,13 +25,6 @@
 	   (value-of a ρ v)
 	   (extend-env ρ x v rho)
 	   (do-let es rho new-ρ)))))
-
-(defun all-lines ()
-  '(var
-    boolean symbol number cons
-    + - * exp < <= > >=
-    car cdr append reverse
-    let))
 
 (defun expr-for-value-of ()
   '(conde
@@ -126,6 +103,14 @@
 	    (do-let es ρ new-ρ)
 	    (value-of b new-ρ o)))))
 
+
+(defun all-lines ()
+  '(var
+    boolean symbol number cons
+    + - * exp < <= > >=
+    car cdr append reverse
+    let))
+
 (defmacro reset-interp ()
   `(progn
      (defrel value-of (expr ρ o)
@@ -134,34 +119,6 @@
        ,(all-lines))))
 
 (reset-interp)
-;;;;; Creating new clauses for relational ACL2s interpreter
-
-
-(defun new-clause (num-args vars pmatch recursive-calls final)
-  (cond
-   ((= num-args 0) `((fresh ,vars (== expr ,pmatch) ,@recursive-calls (,@final o))))
-   (t (let ((subexpr (next-var))
-	    (subres (next-var)))
-	(let ((new-vars `(,@vars ,subexpr ,subres))
-	      (new-pmatch `(,@pmatch ,subexpr))
-	      (new-rec-calls
-	       `(,@recursive-calls (value-of ,subexpr ρ ,subres)))
-	      (new-final `(,@final ,subres)))
-	  (new-clause
-	   (- num-args 1) new-vars new-pmatch new-rec-calls new-final))))))
-
-(defun add-to-interpreter (name rel-name num-args)
-  (let ((new-clause
-	 (new-clause num-args nil `(list ',name) nil `(,rel-name)))
-	(current-interp (expr-for-value-of))
-	(current-lines (all-lines)))
-    (progn
-      (defun expr-for-value-of ()
-	(append current-interp (list new-clause)))
-      (defun all-lines ()
-	(append current-lines (list name)))
-      (eval `(defrel value-of (expr ρ o)
-	      ,(expr-for-value-of))))))
 
 ;;;;;;;;;;
 
@@ -202,13 +159,6 @@
 (defrel find-equivalent (forms e tests results)
   (contains-forms forms e)
   (passes-tests e tests results))
-
-(defmacro gen-mk (name vars definition)
-  (let ((new-output (next-var))
-	(new-name (get-rel-name name)))
-    (let ((a (miniKanrenize definition new-output)))
-      `(defrel ,new-name (,@vars ,new-output)
-	 ,a))))
 
 
 

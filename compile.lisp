@@ -1,7 +1,4 @@
-(load "~/lemmas/helpers.lisp")
-(load "~/lemmas/mk.lisp")
-(load "~/lemmas/relational-primitives.lisp")
-
+(load "helpers.lisp")
 
 #|
 This file implements a compiler from functional programs
