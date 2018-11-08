@@ -11,11 +11,9 @@
 (defun fix-atom (e)
   (cond
    ((symbolp e) e)
-   ((acl2-numberp e)
-    (cond
-     ((integerp e) (build-num (abs e)))
-     ((rationalp e) (build-num (denominator e)))
-     (t (build-num (random 10)))))
+   ((integerp e) (build-num (abs e)))
+   ((rationalp e) (build-num (denominator e)))
+   ;; strings, chars, and complex numbers become random numbers
    (t (build-num (random 10)))))
 
 
@@ -38,6 +36,9 @@
    (t (cons (clean-expr (car e))
 	    (clean-expr (cdr e))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; forms to create valid values from test cases (for environment)
+#|
 (defun unquote-tests (es)
   (cond
    ((endp es) nil)
@@ -47,26 +48,36 @@
 	(if (and (consp a) (equal (car a) 'quote))
 	    `((,x ,(cadr a)) . ,rst)
 	  `((,x ,a) . ,rst))))))
+|#
+(defun elim-bad-atoms-and-quote (exp)
+  (cond
+   ((symbolp exp) exp)
+   ((integerp exp) (abs exp))
+   ((rationalp exp) (abs (+ (numerator exp) (denominator exp))))
+   ((not (consp exp)) (random 10))
+   ((equal (car exp) 'quote) (elim-bad-atoms-and-quote (cadr exp)))
+   (t (cons (elim-bad-atoms-and-quote (car exp))
+	    (elim-bad-atoms-and-quote (cdr exp))))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; forms to create valid values from test cases (for environment)
+(defun coerce-val (pr)
+  (list (car pr) (elim-bad-atoms-and-quote (cadr pr))))
+(defun coerce-tests (tests) (mapcar #'coerce-val tests))
+
 (defun clean-val (exp)
   (cond
-   ((not (consp exp)) (fix-atom exp))
+   ((booleanp exp) exp)
+   ((symbolp exp) (build-sym exp))
+   ((natp exp) (build-num exp))
+   ((not (consp exp)) (error "What is this? ~a" exp))
    ((equal (car exp) 'quote)
     (clean-val (cadr exp)))
    ((consp exp)
     (list 'INTERNAL-CONS (clean-val (car exp))
 	  (clean-val (cdr exp))))))
 
-(defun clean-tests (alist)
-  (cond
-   ((endp alist) nil)
-   (t (let* ((v (car alist))
-	     (x (car v))
-	     (val (cadr v)))
-	(cons (list x (clean-val val))
-	      (clean-tests (cdr alist)))))))
+(defun clean-pr (pr)
+  (list (car pr) (clean-val (cadr pr))))
+(defun clean-tests (alist) (mapcar #'clean-pr alist))
 
 ;;; Takes synthesized expressions, and removes evidence
 ;; of internal values
@@ -106,8 +117,10 @@
 (defun subs (x v e)
   (cond
    ((equal e x) `',v)
-   ((consp e) (cons (subs x v (car e))
-		    (subs x v (cdr e))))
+   ((consp e)
+    (if (equal (car e) 'quote) e
+      (cons (subs x v (car e))
+	    (subs x v (cdr e)))))
    (t e)))
 
 (defun evaluate-in-substitution (form args)
@@ -235,34 +248,75 @@ The keywords for suggest-lemma are:
    (cdr (cadadr cx?))))
 
 
+
+((ACL2::B '(ACL2::A ACL2::BA))
+                        (ACL2::A NIL))
 (defun suggest-lemma-loop (i forms hyps start tests)
-  (print "starting agin")
   (if (>= i 5)
-	 (list "COULDN'T FIND A SOLUTION! Try adding more hypotheses, or giving extra hints")
-       (let* ((new-tests (mapcar #'clean-tests tests))
-	      (results (mapcar #'clean-val
-			       (eval-all start
-					 (mapcar #'unquote-tests tests))))
-	      (hyps (hyps->ex (append (mapcar #'list hyps)
-				      #|(get-hyps ',start)|#))))
-	 (print "beginning evaluation")
-	 #|(print `(find-equivalent ',forms
-				  q
-				  ',new-tests
-				  ',results))|#
-	 (let ((form
-		(read-back
-		 (eval `(car (run 1 q (find-equivalent ',forms
-						       q
-						       ',new-tests
-						       ',results)))))))
-	   (print "done with eval")
-	   (mv-let
-	    (cx? v state)
-	    (acl2s-query `(acl2s::itest? (implies ,hyps (equal ,start ,form))))
-	    (if (not (caadr cx?))
-		(list "FOUND" `(implies ,hyps (equal ,start ,form)) "IN" i "TRIES!")
-	      (suggest-lemma-loop (+ i 1) forms hyps start (append (cdr (cadadr cx?)) tests))))))))
+      (list "COULDN'T FIND A SOLUTION!"
+	    "Try adding more hypotheses, or giving extra hints")
+    (let* ((hyps (hyps->ex (append (mapcar #'list hyps) #|(get-hyps ',start)|#)))
+	   (cleaned-tests (mapcar #'coerce-tests tests))
+	   (new-tests (mapcar #'clean-tests cleaned-tests))
+	   (results (mapcar #'clean-val
+			    (eval-all start cleaned-tests
+				      #|(mapcar #'unquote-tests cleaned-tests)|#))))
+      results)))
+
+
+(defun suggest-lemma-loop (i forms hyps start tests)
+  (if (>= i 5)
+      (list "COULDN'T FIND A SOLUTION!"
+	    "Try adding more hypotheses, or giving extra hints")
+    (let* ((cleaned-tests (mapcar #'coerce-tests tests))
+	   (new-tests (mapcar #'clean-tests cleaned-tests))
+	   (results (mapcar #'clean-val
+			    (eval-all start cleaned-tests #|(mapcar #'unquote-tests tests)|#)))
+	   (hyps (hyps->ex (append (mapcar #'list hyps)
+				   #|(get-hyps ',start)|#))))
+      (print (list "Evaluating:"
+		   `(find-equivalent ',forms
+				     q
+				     ',new-tests
+				     ',results)))
+      (let ((form
+	     (read-back
+	      (eval `(car (run 1 q (find-equivalent ',forms
+						    q
+						    ',new-tests
+						    ',results)))))))
+	(print "done with eval")
+	(mv-let
+	 (cx? v state)
+	 (acl2s-query `(acl2s::itest? (implies ,hyps (equal ,start ,form))))
+	 (if (not (caadr cx?))
+	     (list "FOUND" `(implies ,hyps (equal ,start ,form)) "IN" i "TRIES!")
+	   (suggest-lemma-loop (+ i 1) forms hyps start
+			       (cdr (cadadr cx?))
+			       #|(append (cdr (cadadr cx?)) tests)|#)))))))
+
+#|
+((B NIL) (A NIL))
+=> NIL
+
+((B (INTERNAL-CONS (INTERNAL-NUMBER 0 1 0 0 1) (INTERNAL-CONS (INTERNAL-NUMBER 1 0 1) NIL))) (A (INTERNAL-CONS (INTERNAL-SYMBOL BA) (INTERNAL-CONS (INTERNAL-SYMBOL BA) NIL))))
+=>
+(INTERNAL-CONS (INTERNAL-NUMBER 1 0 1) (INTERNAL-CONS (INTERNAL-NUMBER 0 1 0 0 1) (INTERNAL-CONS (INTERNAL-SYMBOL BA) (INTERNAL-CONS (INTERNAL-SYMBOL BA) NIL))))
+
+((B (INTERNAL-CONS (INTERNAL-SYMBOL A) (INTERNAL-CONS (INTERNAL-SYMBOL BA) NIL))) (A NIL))
+=>
+(INTERNAL-CONS (INTERNAL-SYMBOL BA) (INTERNAL-CONS NIL NIL))
+
+|#
+#|
+(FIND-EQUIVALENT '(A B REVERSE) Q  )
+
+|#
+#|
+(let ((n (acl2s::acl2s-defaults :get acl2s::num-counterexamples)))
+	     (acl2s-event `(acl2s::acl2s-defaults :set acl2s::num-counterexamples (+ 1 ,n)))
+	     (suggest-lemma-loop (+ i 1) forms hyps start (append (cdr (cadadr cx?)) tests)))
+|#
 
 (defmacro suggest-lemma (start &rest xargs)
   `(multiple-value-bind

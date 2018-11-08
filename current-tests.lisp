@@ -1,20 +1,15 @@
 (include-book "itest-cgen")
 (include-book "itest-ithm")
 
-(acl2s-defaults :set sampling-method :be)
 :q
 
 (load "suggest-lemma.lisp")
 
 (suggest-lemma (reverse (append a b))
-	       :required-expressions a b reverse
+	       :required-expressions a b reverse append
 	       :with reverse append
 	       :hyps (true-listp a) (true-listp b))
-#|
-(IMPLIES (AND (TRUE-LISTP A) (TRUE-LISTP B))
-	 (EQUAL (REVERSE (APPEND A B))
-		(APPEND (REVERSE B) A)))
-|#
+
 (defunc2 rev-acc (ls acc)
   :input-contract (and (true-listp ls) (true-listp acc))
   :output-contract t
