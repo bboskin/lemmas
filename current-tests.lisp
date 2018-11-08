@@ -1,9 +1,10 @@
 (include-book "itest-cgen")
 (include-book "itest-ithm")
-:q
-(load "suggest-lemma.lisp")
 
-;;;;;;;;;;;;;;;
+(acl2s-defaults :set sampling-method :be)
+:q
+
+(load "suggest-lemma.lisp")
 
 (suggest-lemma (reverse (append a b))
 	       :required-expressions a b reverse

@@ -56,8 +56,8 @@
    ((equal (car exp) 'quote)
     (clean-val (cadr exp)))
    ((consp exp)
-       (list 'INTERNAL-CONS (clean-val (car exp))
-	     (clean-val (cdr exp))))))
+    (list 'INTERNAL-CONS (clean-val (car exp))
+	  (clean-val (cdr exp))))))
 
 (defun clean-tests (alist)
   (cond
@@ -86,8 +86,7 @@
 
 ;;;; To get hypotheses
 (defun make-ex (e tag)
-  (if (> (length e) 1)
-      `(,tag . ,e) (car e)))
+  (if (> (length e) 1) `(,tag . ,e) (car e)))
 
 (defun hyps->ex (h)
   (make-ex (mapcar #'(lambda (e) (make-ex e 'or)) h) 'and))
@@ -237,25 +236,33 @@ The keywords for suggest-lemma are:
 
 
 (defun suggest-lemma-loop (i forms hyps start tests)
-  (let* ((new-tests (mapcar #'clean-tests tests))
-	 (results (mapcar #'clean-val
-			  (eval-all start
-				    (mapcar #'unquote-tests tests))))
-	 (hyps (hyps->ex (append (mapcar #'list hyps)
-			 	 #|(get-hyps ',start)|#))))
-    (let ((form
-	   (read-back
-	    (eval `(car (run 1 q (find-equivalent ',forms
-						  q
-						  ',new-tests
-						  ',results)))))))
-      `(implies ,hyps (equal ,start ,form))
-      (mv-let
-       (cx? v state)
-       (acl2s-query `(acl2s::itest? (implies ,hyps (equal ,start ,form))))
-       (if (not (caadr cx?))
-	   (list "FOUND:" `(implies ,hyps (equal ,start ,form)) "IN" i "TRIES!")
-	 (suggest-lemma-loop (+ i 1) forms hyps start (append (cdr (cadadr cx?)) tests)))))))
+  (print "starting agin")
+  (if (>= i 5)
+	 (list "COULDN'T FIND A SOLUTION! Try adding more hypotheses, or giving extra hints")
+       (let* ((new-tests (mapcar #'clean-tests tests))
+	      (results (mapcar #'clean-val
+			       (eval-all start
+					 (mapcar #'unquote-tests tests))))
+	      (hyps (hyps->ex (append (mapcar #'list hyps)
+				      #|(get-hyps ',start)|#))))
+	 (print "beginning evaluation")
+	 #|(print `(find-equivalent ',forms
+				  q
+				  ',new-tests
+				  ',results))|#
+	 (let ((form
+		(read-back
+		 (eval `(car (run 1 q (find-equivalent ',forms
+						       q
+						       ',new-tests
+						       ',results)))))))
+	   (print "done with eval")
+	   (mv-let
+	    (cx? v state)
+	    (acl2s-query `(acl2s::itest? (implies ,hyps (equal ,start ,form))))
+	    (if (not (caadr cx?))
+		(list "FOUND" `(implies ,hyps (equal ,start ,form)) "IN" i "TRIES!")
+	      (suggest-lemma-loop (+ i 1) forms hyps start (append (cdr (cadadr cx?)) tests))))))))
 
 (defmacro suggest-lemma (start &rest xargs)
   `(multiple-value-bind
@@ -274,7 +281,8 @@ The keywords for suggest-lemma are:
 			      (all-lines))))
       (progn (eval `(defrel value-of (expr ρ o)
 		      (conde . ,new-e)))
-	     (suggest-lemma-loop 1 new-forms hyps ',start (test-gen `(and . ,hyps))
+	     (suggest-lemma-loop 1 new-forms hyps
+				 ',start (test-gen `(and . ,hyps))
 	 )))))
 
 
