@@ -1,4 +1,4 @@
-(load "primitives.lisp")
+(load "primitives-raw.lsp")
 
 ;; Environments
 

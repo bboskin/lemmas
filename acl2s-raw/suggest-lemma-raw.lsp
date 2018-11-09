@@ -1,6 +1,11 @@
-(load "interp.lisp")
-(load "defunc2.lisp")
-(load "to-acl2.lisp")
+(in-package "ACL2S")
+
+
+(load "interp-raw.lsp")
+(load "to-acl2-raw.lsp")
+
+;(load "itest-cgen.lisp")
+;(load "itest-ithm.lisp")
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; Forms to create valid expressions
 
@@ -38,17 +43,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; forms to create valid values from test cases (for environment)
-#|
-(defun unquote-tests (es)
-  (cond
-   ((endp es) nil)
-   (t (let ((x (caar es))
-	    (a (cadar es))
-	    (rst (unquote-tests (cdr es))))
-	(if (and (consp a) (equal (car a) 'quote))
-	    `((,x ,(cadr a)) . ,rst)
-	  `((,x ,a) . ,rst))))))
-|#
+
 (defun elim-bad-atoms-and-quote (exp)
   (cond
    ((symbolp exp) exp)
@@ -94,23 +89,6 @@
 	      (read-back (caddr v))))
        (t (cons (read-back tag)
 		(read-back (cdr v)))))))))
-
-;;;; To get hypotheses
-(defun make-ex (e tag)
-  (if (> (length e) 1) `(,tag . ,e) (car e)))
-
-(defun hyps->ex (h)
-  (make-ex (mapcar #'(lambda (e) (make-ex e 'or)) h) 'and))
-
-(defun get-hyps (form)
-  (mv-let
-   (cx? e state)
-   (acl2s-query `(acl2s::guard-obligation
-		  ',form
-		  nil nil
-		  'top-level
-		  state))
-   (hyps->ex (cadr (cadr (cadr cx?))))))
 
 ;; suggest-lemma
 
@@ -241,28 +219,97 @@ The keywords for suggest-lemma are:
     (except (cdr l1) l2))
    (t (cons (car l1) (except (cdr l1) l2)))))
 
+;;;; To get hypotheses
+(defun make-ex (e tag)
+  (if (> (length e) 1) `(,tag . ,e) (car e)))
+
+(defun find-hyps (form)
+  (let ((state *the-live-state*))
+    (declare (stobjs state))
+    (progn!
+     (acl2::ld `((mv-let
+		  (v g)
+		  (acl2s::guard-obligation ',form nil nil 'top-level state)
+		  (declare (ignore v))
+		  (assign result g))))
+     (acl2::@ result))))
+
+(defun free-vars (form)
+  (cond
+   ((symbolp form) (list form))
+   ((consp form)
+    (cond
+     ((equal (car form) 'quote) nil)
+     ((equal (car form) 'let)
+      (append (mapcar #'free-vars (mapcar #'cadr (cadr form)))
+	      (except
+	       (free-vars (caddr form))
+	       (mapcar #'car (cadr form)))))
+     ((not (symbolp (car form)))
+      (reduce #'append (mapcar #'free-vars form)
+	      :initial-value nil))
+     (t (reduce #'append (mapcar #'free-vars (cdr form))
+		:initial-value nil))))
+   (t nil)))
+
+(defun include-all-vars (hyps vs)
+  (cond
+   ((endp vs) hyps)
+   ((member (car vs) (free-vars hyps))
+    (include-all-vars hyps (cdr vs)))
+   (t (include-all-vars (cons `(allp ,(car vs)) hyps) (cdr vs)))))
+
+(defun get-hyps (form)
+  (find-hyps form)
+  (mapcar #'(lambda (e) (make-ex e 'or))
+	  (cadr (@ result))))
+
+
+(defun subsumed? (e1 e2)
+  (let ((state *the-live-state*))
+    (declare (stobjs state))
+    (progn!
+     (acl2::ld `((mv-let
+		  (cx? v state)
+		  (acl2s::itest? (implies ,e2 ,e1))
+		  (declare (ignore v))
+		  (assign result (not cx?)))))
+     (acl2::@ result))))
+
+(defun simplify-hyps (hyps seen)
+  (cond
+   ((endp hyps) seen)
+   (t (subsumed? (car hyps) `(and ,@(cdr hyps) ,@seen))
+      (if (@ result)
+	  (simplify-hyps (cdr hyps) seen)
+	  (simplify-hyps (cdr hyps) (cons (car hyps) seen))))))
+
+;; using itest?
 (defun test-gen (hyps)
-  (mv-let
-   (cx? v state)
-   (acl2s-query `(acl2s::itest? (implies ,hyps nil)))
-   (cdr (cadadr cx?))))
+  (let ((state *the-live-state*))
+    (progn!
+     (acl2::ld `((mv-let
+		  (cx? v state)
+		  (acl2s::itest? (implies ,hyps nil))
+		  (assign result (list cx? v)))))
+     (acl2::@ result))))
 
+(defun final-test (hyps from to)
+  (let ((state *the-live-state*))
+    (progn!
+     (acl2::ld `((mv-let
+		  (cx? v state)
+		  (acl2s::itest? (implies ,hyps (equal ,from ,to)))
+		  (assign result (list cx? v)))))
+     (acl2::@ result))))
 
+(defun get-tests (hyps)
+  (test-gen `(and . ,hyps))
+  (cdadr (@ result)))
 
-((ACL2::B '(ACL2::A ACL2::BA))
-                        (ACL2::A NIL))
-(defun suggest-lemma-loop (i forms hyps start tests)
-  (if (>= i 5)
-      (list "COULDN'T FIND A SOLUTION!"
-	    "Try adding more hypotheses, or giving extra hints")
-    (let* ((hyps (hyps->ex (append (mapcar #'list hyps) #|(get-hyps ',start)|#)))
-	   (cleaned-tests (mapcar #'coerce-tests tests))
-	   (new-tests (mapcar #'clean-tests cleaned-tests))
-	   (results (mapcar #'clean-val
-			    (eval-all start cleaned-tests
-				      #|(mapcar #'unquote-tests cleaned-tests)|#))))
-      results)))
-
+(defun get-final (hyps from to)
+  (final-test `(and . ,hyps) from to)
+  (@ result))
 
 (defun suggest-lemma-loop (i forms hyps start tests)
   (if (>= i 5)
@@ -271,106 +318,43 @@ The keywords for suggest-lemma are:
     (let* ((cleaned-tests (mapcar #'coerce-tests tests))
 	   (new-tests (mapcar #'clean-tests cleaned-tests))
 	   (results (mapcar #'clean-val
-			    (eval-all start cleaned-tests #|(mapcar #'unquote-tests tests)|#)))
-	   (hyps (hyps->ex (append (mapcar #'list hyps)
-				   #|(get-hyps ',start)|#))))
-      (print (list "Evaluating:"
-		   `(find-equivalent ',forms
-				     q
-				     ',new-tests
-				     ',results)))
+			    (eval-all start cleaned-tests))))
       (let ((form
 	     (read-back
 	      (eval `(car (run 1 q (find-equivalent ',forms
 						    q
 						    ',new-tests
 						    ',results)))))))
-	(print "done with eval")
-	(mv-let
-	 (cx? v state)
-	 (acl2s-query `(acl2s::itest? (implies ,hyps (equal ,start ,form))))
-	 (if (not (caadr cx?))
-	     (list "FOUND" `(implies ,hyps (equal ,start ,form)) "IN" i "TRIES!")
-	   (suggest-lemma-loop (+ i 1) forms hyps start
-			       (cdr (cadadr cx?))
-			       #|(append (cdr (cadadr cx?)) tests)|#)))))))
+	(get-final hyps start form)
+	(let ((res (@ result)))
+	  (if (not (car (@ result)))
+	      (list "FOUND" `(implies (and . ,hyps) (equal ,start ,form)) "IN" i "TRIES!")
+	    (suggest-lemma-loop (+ i 1) forms hyps start
+				(append (cdadr (@ result)) tests))))))))
 
-#|
-((B NIL) (A NIL))
-=> NIL
-
-((B (INTERNAL-CONS (INTERNAL-NUMBER 0 1 0 0 1) (INTERNAL-CONS (INTERNAL-NUMBER 1 0 1) NIL))) (A (INTERNAL-CONS (INTERNAL-SYMBOL BA) (INTERNAL-CONS (INTERNAL-SYMBOL BA) NIL))))
-=>
-(INTERNAL-CONS (INTERNAL-NUMBER 1 0 1) (INTERNAL-CONS (INTERNAL-NUMBER 0 1 0 0 1) (INTERNAL-CONS (INTERNAL-SYMBOL BA) (INTERNAL-CONS (INTERNAL-SYMBOL BA) NIL))))
-
-((B (INTERNAL-CONS (INTERNAL-SYMBOL A) (INTERNAL-CONS (INTERNAL-SYMBOL BA) NIL))) (A NIL))
-=>
-(INTERNAL-CONS (INTERNAL-SYMBOL BA) (INTERNAL-CONS NIL NIL))
-
-|#
-#|
-(FIND-EQUIVALENT '(A B REVERSE) Q  )
-
-|#
-#|
-(let ((n (acl2s::acl2s-defaults :get acl2s::num-counterexamples)))
-	     (acl2s-event `(acl2s::acl2s-defaults :set acl2s::num-counterexamples (+ 1 ,n)))
-	     (suggest-lemma-loop (+ i 1) forms hyps start (append (cdr (cadadr cx?)) tests)))
-|#
-
-(defmacro suggest-lemma (start &rest xargs)
-  `(multiple-value-bind
-    (forms excl with hyps)
-    (parse-xargs ',xargs nil nil nil nil)
-    (let* (;;setting up the evaluator
-	   (new-forms (clean-expr forms))
-	   (req (get-lines new-forms (all-lines) (all-groups)))
-	   (incs (if (not with) req
-		   (cons 'var (get-lines with (all-lines) (all-groups)))))
-	   (excs (if (not excl) nil
-		   (get-lines excl (all-lines) (all-groups))))
-	   (lns (append req (except incs excs)))
-	   (new-e (new-val-of lns
-			      (cdr (expr-for-value-of))
-			      (all-lines))))
-      (progn (eval `(defrel value-of (expr ρ o)
-		      (conde . ,new-e)))
-	     (suggest-lemma-loop 1 new-forms hyps
-				 ',start (test-gen `(and . ,hyps))
-	 )))))
-
-
-#|
-(defmacro suggest-lemma (start &rest xargs)
-  `(multiple-value-bind
-    (forms excl with hyps)
-    (parse-xargs ',xargs nil nil nil nil)
-    (let* ((tests (test-gen `(and . ,hyps)))
-	   (new-tests (mapcar #'clean-tests tests))
-	   (results (mapcar #'clean-val (eval-all ',start (mapcar #'unquote-tests tests))))
-	   (hyps (hyps->ex (append (mapcar #'list hyps) #|(get-hyps ',start)|#)))
-	   (new-forms (clean-expr forms))
-	   (req (get-lines new-forms (all-lines) (all-groups)))
-	   (incs (if (not with)
-		     req
-		   (cons 'var (get-lines with (all-lines) (all-groups)))))
-	   (excs (if (not excl) nil
-		   (get-lines excl (all-lines) (all-groups))))
-	   (lns (append req (except incs excs)))
-	   (new-e (new-val-of lns
-			      (cdr (expr-for-value-of))
-			      (all-lines))))
-      (progn
-	(eval `(defrel value-of (expr ρ o)
-		 (conde . ,new-e)))
-	(let ((form
-	       (read-back
-		(eval `(car (run 1 q (find-equivalent ',new-forms
-						      q
-						      ',new-tests
-						      ',results)))))))
-	  `(implies ,hyps (equal ,',start ,form)))))))
-|#
+(defun suggest-lemma-inner (start xargs)
+  (multiple-value-bind
+   (forms excl with hyps)
+   (parse-xargs xargs nil nil nil nil)
+   (let* (;;setting up the evaluator
+	  (new-forms (clean-expr forms))
+	  (req (get-lines new-forms (all-lines) (all-groups)))
+	  (incs (if (not with) (cons 'var req)
+		  (cons 'var (get-lines with (all-lines) (all-groups)))))
+	  (excs (if (not excl) nil
+		  (get-lines excl (all-lines) (all-groups))))
+	  (lns (append req (except incs excs)))
+	  (new-e (new-val-of lns
+			     (cdr (expr-for-value-of))
+			     (all-lines)))
+	  ;; setting up hypotheses
+	  (contract-hyps (get-hyps start))
+	  (hyps (include-all-vars (simplify-hyps (append contract-hyps hyps) nil)
+				  (free-vars start))))
+     (eval `(defrel value-of (expr ρ o)
+	      (conde . ,new-e)))
+     (get-tests hyps)
+     (suggest-lemma-loop 1 new-forms hyps start (cdadr (@ result))))))
 
 (defun all-lines ()
   (list 'var
@@ -383,14 +367,16 @@ The keywords for suggest-lemma are:
       
 ;; organizing expression forms into groups
 
-(defmacro defgroup (name &rest expressions)
-  `(progn
-     (defun ,name () ',expressions)
-     (let ((gs (all-groups)))
-       (defun all-groups ()
-	 (cons ',name gs)))))
+(defun defgroup-inner (name expressions)
+  (progn
+    (eval `(defun ,name () ',expressions))
+    (let ((gs (all-groups)))
+      (defun all-groups ()
+	(cons name gs)))))
 
-(defmacro add-to-group (name &rest expressions)
+(defun add-to-group-inner (name expressions)
   (let ((e (apply name ())))
-    `(defun ,name ()
-       (append ',expressions ',e))))
+    (eval `(defun ,name ()
+	    (append ',expressions ',e)))))
+
+

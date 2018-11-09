@@ -394,5 +394,3 @@ The keywords for suggest-lemma are:
   (let ((e (apply name ())))
     `(defun ,name ()
        (append ',expressions ',e))))
-
-

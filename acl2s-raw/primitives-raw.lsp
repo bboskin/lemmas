@@ -1,6 +1,6 @@
 #|Primitives used in the ACL2s->miniKanren compiler|#
-(load "mk.lisp")
-(load "numbers.lisp")
+(load "mk-raw.lsp")
+(load "numbers-raw.lsp")
 
 #|
 There are three explicit types here, denoted within the interpreter with tags
@@ -48,6 +48,16 @@ from the function.
       `(INTERNAL-SYMBOL ,s)
     (error "Not a symbol: ~a" s)))
 
+(defrel symbolpo (s)
+  (conde
+   ((varpo s))
+   ((booleanpo s))))
+
+(defrel symbolpo-fn (s o)
+  (conde
+   ((symbolpo s) (== o t))
+   ((numberpo s) (== o nil))
+   ((conspo s) (== o nil))))
 
 ;; a useful relation
 (defrel non-nilo (e)

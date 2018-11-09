@@ -1,27 +1,30 @@
-(load "compile.lisp")
-(load "to-acl2.lisp")
+(in-package "ACL2S")
 
-(defmacro gen-mk (name vars definition)
+(load "compile-raw.lsp")
+(load "to-acl2-raw.lsp")
+#|
+(load "helpers-raw.lsp")
+(load "interp-raw.lsp")
+|#
+(defun gen-mk (name vars definition)
   (let ((new-output (next-var))
 	(new-name (get-rel-name name)))
     (let ((a (miniKanrenize definition new-output)))
-      `(defrel ,new-name (,@vars ,new-output)
-	 ,a))))
+      (eval `(defrel ,new-name ,(append vars (list new-output))
+	       ,a)))))
 
+(defun all-lines ()
+  '(var
+    boolean symbol number cons
+    + - * exp < <= > >=
+    car cdr append reverse
+    let))
 
-(defmacro defunc2 (name vars ic-ig ic oc-ig oc body)
-  `(if (not (and (equal ',ic-ig ':input-contract)
-		 (equal ',oc-ig ':output-contract)))
-       (error "Expected an input and output contract")
-       (progn
-	 #|(acl2s-query `(defun ,',name ,',vars
-			 (declare (xargs :guard ,',ic))
-			 ,',body))|#
-	 (defun ,name ,vars ,body)
-	 (gen-mk ,name ,vars ,body)
-	 (add-to-interpreter ',name
-			     (get-rel-name ',name)
-			     (len ',vars)))))
+(defun gen-rel-inner (name vars body state)
+  (progn
+    (add-to-interpreter name (get-rel-name name) (len vars))
+    (gen-mk name vars body)
+    (mv nil nil state)))
 
 ;;;;; Creating new clauses for relational ACL2s interpreter
 
