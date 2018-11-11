@@ -1,3 +1,5 @@
+(in-package "ACL2S")
+
 ; Creating new variable names
 (defun next-index () 0)
 (defun next-var ()

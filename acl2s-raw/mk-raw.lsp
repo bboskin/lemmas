@@ -1,3 +1,5 @@
+(in-package "ACL2S")
+
 (defun mymap (f ls)
      (cond
       ((endp ls) nil)
@@ -195,9 +197,9 @@
 
 (defmacro defrel (name xs &rest gs)
   `(acl2::defun ,name ,xs
-     (lambda (s)
-       (lambda ()
-	 (apply (conj ,gs) (list s))))))
+		(lambda (s)
+		  (lambda ()
+		    (apply (conj ,gs) (list s))))))
 
 (defmacro run* (q &rest gs)
   `(run nil ,q . ,gs))

@@ -37,23 +37,29 @@
   (declare (ignore form form to))
   (acl2::raise "wrong"))
 
-#|
-(acl2::define test-gen ((ls allp))
-	       :returns (nil)
-	       (declare (ignore ls))
-	       (acl2::raise "wrong"))
-|#
+(acl2::include-raw "to-acl2-raw.lsp" :do-not-compile t)
+(acl2::include-raw "helpers-raw.lsp" :do-not-compile t)
+
+(acl2::include-raw "mk-raw.lsp" :do-not-compile t)
+(acl2::include-raw "numbers-raw.lsp" :do-not-compile t)
+(acl2::include-raw "primitives-raw.lsp" :do-not-compile t)
+
+(acl2::include-raw "compile-raw.lsp" :do-not-compile t)
+(acl2::include-raw "interp-raw.lsp" :do-not-compile t)
+
 (acl2::include-raw "suggest-lemma-raw.lsp" :do-not-compile t)
 (acl2::include-raw "defunc2-raw.lsp" :do-not-compile t)
+
 (defmacro suggest-lemma (form &rest args)
   `(suggest-lemma-inner ',form ',args))
 
 (defmacro defunc2 (name vars ic-ig ic oc-ig oc body)
-  (declare (ignore ic-ig oc-ig oc))
+  (declare (ignore ic-ig oc-ig))
   `(progn!
     (gen-rel-inner ',name ',vars ',body state)
-    (defun ,name ,vars
-      (declare (xargs :guard ,ic))
+    (defunc ,name ,vars
+      :input-contract ,ic
+      :output-contract ,oc
       ,body)))
 
 (defmacro defgroup (name &rest args)

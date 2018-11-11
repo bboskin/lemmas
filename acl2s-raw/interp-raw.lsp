@@ -1,5 +1,6 @@
-(load "primitives-raw.lsp")
-
+(in-package "ACL2S")
+;(load "primitives-raw.lsp")
+;(load "helpers-raw.lsp")
 ;; Environments
 
 (defrel lookupo (y ρ o)
@@ -26,11 +27,85 @@
 	   (extend-env ρ x v rho)
 	   (do-let es rho new-ρ)))))
 
+(defrel do-cond (es ρ o)
+  (conde
+   ((== es '()) (== o nil))
+   ((fresh (tst c rst b)
+	   (== es `((,tst ,c) . ,rst))
+	   (value-of tst ρ b)
+	   (conde
+	    ((== b nil) (do-cond rst ρ o))
+	    ((non-nilo b) (value-of c ρ o)))))))
+
+(defparameter *interp-built-ins*
+  '((+ 2 do-pluso) (- 2 do-minuso) (* 2 do-timeso) (sqr 1 do-sqro)
+    (< 2 do-less-than-o-fn) (<= 2 do-less-than-equal-o-fn)
+    (> 2 do-greater-than-o-fn) (>= 2 do-greater-than-equal-o-fn)
+    (append 2 appendo) (reverse 1 reverso)
+    (and 2 ando) (or 2 oro) (not 1 noto)
+    (booleanp 1 booleanpo-fn) (symbolp 1 symbolpo-fn)
+    (numberp 1 numberpo-fn) (varp 1 varpo-fn) (consp 1 conspo-fn)
+    (endp 1 endpo-fn) (zerop 1 zeropo-fn)))
+
+(defun new-clause (num-args vars pmatch recursive-calls final)
+  (cond
+   ((= num-args 0)
+    `((fresh ,vars
+	     (== expr ,pmatch)
+	     ,@recursive-calls
+	     (,@final o))))
+   (t (let ((subexpr (next-var))
+	    (subres (next-var)))
+	(let ((new-vars `(,@vars ,subexpr ,subres))
+	      (new-pmatch `(,@pmatch ,subexpr))
+	      (new-rec-calls
+	       `(,@recursive-calls (value-of ,subexpr ρ ,subres)))
+	      (new-final `(,@final ,subres)))
+	  (new-clause
+	   (- num-args 1) new-vars new-pmatch new-rec-calls new-final))))))
+
+(defun make-init-value-of-clause (e)
+  (let ((name (car e))
+	(arity (cadr e))
+	(rel-name (caddr e)))
+    (new-clause arity nil `(list ',name) nil (list rel-name))))
+
+(defun expr-for-value-of ()
+  `(conde
+    ;; environment lookup
+    ((lookupo expr ρ o))
+    ;; constants
+    ((booleanpo expr) (== o expr))
+    ((varpo expr) (== o expr))
+    ((numberpo expr) (== o expr))
+    ;; cons, car, cdr are hard-coded since they are non-recursive, meaning
+    ;; that doing the helper function first is better
+    ((fresh (a d res1 res2) (== expr `(cons ,a ,d)) (conso res1 res2 o)
+	    (value-of a ρ res1) (value-of d ρ res2)))
+    ((fresh (pr res) (== expr `(car ,pr)) (caro res o) (value-of pr ρ res)))
+    ((fresh (pr res) (== expr `(cdr ,pr)) (cdro res o) (value-of pr ρ res)))
+    ;; More complex build-ins (let, if, cond)
+    ((fresh (es b new-ρ)
+	    (== expr `(let ,es ,b))
+	    (do-let es ρ new-ρ)
+	    (value-of b new-ρ o)))
+    ((fresh (tst c a b)
+	    (== expr `(if ,tst ,c ,a))
+	    (value-of tst ρ b)
+	    (conde
+	     ((== b nil) (value-of a ρ o))
+	     ((non-nilo b) (value-of c ρ o)))))
+    ((fresh (es)
+	    (== expr `(cond . ,es))
+	    (do-cond es ρ o)))
+    ;; everything else -- standard recursion & completion
+    . ,(mapcar #'make-init-value-of-clause *interp-built-ins*)))
+#|
 (defun expr-for-value-of ()
   '(conde
     ;; environment lookup
     ((lookupo expr ρ o))
-    ;; constants
+    ;; constants, cons car cdr
     ((booleanpo expr) (== o expr))
     ((varpo expr) (== o expr))
     ((numberpo expr) (== o expr))
@@ -39,48 +114,6 @@
 	    (conso res1 res2 o)
 	    (value-of a ρ res1)
 	    (value-of d ρ res2)))
-    ;; Arithmetic
-    ((fresh (n m n-res m-res)
-	    (== expr `(+ ,n ,m))
-	    (value-of n ρ n-res)
-	    (value-of m ρ m-res)
-	    (do-pluso n-res m-res o)))
-    ((fresh (n m n-res m-res)
-	    (== expr `(- ,n ,m))
-	    (value-of n ρ n-res)
-	    (value-of m ρ m-res)
-	    (do-minuso n-res m-res o)))
-    ((fresh (n m n-res m-res)
-	    (== expr `(* ,n ,m))
-	    (value-of n ρ n-res)
-	    (value-of m ρ m-res)
-	    (do-timeso n-res m-res o)))
-    ((fresh (n m n-res m-res)
-	    (== expr `(exp ,n ,m))
-	    (value-of n ρ n-res)
-	    (value-of m ρ m-res)
-	    (do-expo n-res m-res o)))
-    ((fresh (n m n-res m-res)
-	    (== expr `(< ,n ,m))
-	    (value-of n ρ n-res)
-	    (value-of m ρ m-res)
-	    (do-less-than-o-fn n-res m-res o)))
-    ((fresh (n m n-res m-res)
-	    (== expr `(<= ,n ,m))
-	    (value-of n ρ n-res)
-	    (value-of m ρ m-res)
-	    (do-less-than-equal-o-fn n-res m-res o)))
-    ((fresh (n m n-res m-res)
-	    (== expr `(> ,n ,m))
-	    (value-of n ρ n-res)
-	    (value-of m ρ m-res)
-	    (do-less-than-o-fn m-res n-res o)))
-    ((fresh (n m n-res m-res)
-	    (== expr `(<= ,n ,m))
-	    (value-of n ρ n-res)
-	    (value-of m ρ m-res)
-	    (do-less-than-equal-o-fn m-res n-res o)))
-    ;; list stuff
     ((fresh (pr res)
 	    (== expr `(car ,pr))
 	    (caro res o)
@@ -89,45 +122,32 @@
 	    (== expr `(cdr ,pr))
 	    (cdro res o)
 	    (value-of pr ρ res)))
-    ((fresh (l1 l2 res1 res2)
-	    (== expr `(append ,l1 ,l2))
-	    (value-of l1 ρ res1)
-	    (value-of l2 ρ res2)
-	    (appendo res1 res2 o)))
-    ((fresh (l1 res1)
-	    (== expr `(reverse ,l1))
-	    (value-of l1 ρ res1)
-	    (reverso res1 o)))
-    ((fresh (es b new-ρ)
-	    (== expr `(let ,es ,b))
-	    (do-let es ρ new-ρ)
-	    (value-of b new-ρ o)))))
-
-
-(defun expr-for-has-arity ()
-  '(conde
-    ((== form 'car) (== n 1))
-    ((== form 'cdr) (== n 1))
-    ((== form 'reverse) (== n 1))
-    ((== form 'append) (== n 2))
-    ((== form 'let) (== n 2))
-    ((== form 'cons) (== n 2))
-    ((== form '*) (== n 2))
-    ((== form '+) (== n 2))
-    ((== form '-) (== n 2))
-    ((== form 'exp) (== n 2))
-    ((== form '<) (== n 2))
-    ((== form '>) (== n 2))
-    ((== form '<=) (== n 2))
-    ((== form '>=) (== n 2))
-    ((succeed))))
+    ;; EVERYTHING BELOW CAN BE REPLACED
+ 
+    ;; Let, conditionals
+    ))
+|#
 
 (defun all-lines ()
-  '(var
-    boolean symbol number cons
-    + - * exp < <= > >=
-    car cdr append reverse
-    let))
+  (append 
+   '(var boolean symbol number cons car cdr let if cond)
+   (mapcar #'car *interp-built-ins*)))
+
+(defun make-init-has-arity-clause (pr)
+  (let ((name (car pr))
+	(arity (cadr pr)))
+    `((== form ',name) (== n ,arity))))
+
+(defun expr-for-has-arity ()
+  `(conde
+    ((== form 'cons) (== n 2))
+    ((== form 'car) (== n 1))
+    ((== form 'cdr) (== n 1))
+    ((== form 'if) (== n 3))
+    ((== form 'let) (== n 2))
+    ((== form 'cond))
+    ,@(mapcar #'make-init-has-arity-clause *interp-built-ins*)
+    ((succeed))))
 
 (defmacro reset-interp ()
   `(progn
@@ -136,7 +156,7 @@
      (defrel has-arity (form n)
        ,(expr-for-has-arity))
      (defun all-lines ()
-       ,(all-lines))))
+       ',(all-lines))))
 
 (reset-interp)
 

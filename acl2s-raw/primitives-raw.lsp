@@ -1,6 +1,8 @@
+(in-package "ACL2S")
+
 #|Primitives used in the ACL2s->miniKanren compiler|#
-(load "mk-raw.lsp")
-(load "numbers-raw.lsp")
+;(load "mk-raw.lsp")
+;(load "numbers-raw.lsp")
 
 #|
 There are three explicit types here, denoted within the interpreter with tags
@@ -35,7 +37,10 @@ from the function.
    ((numberpo e) (== o nil))
    ((varpo e) (== o nil))))
 
-(defrel varpo (e) (fresh (v) (== e `(INTERNAL-SYMBOL ,v))))
+(defrel varpo (e)
+  (fresh (v)
+	 (== e `(INTERNAL-SYMBOL ,v))))
+
 (defrel varpo-fn (e o)
   (conde
    ((varpo e) (== o t))
@@ -125,7 +130,9 @@ from the function.
    ((== e nil) (== o t))))
 
 ;; The arithmetic operations: zerop, numberp, +, -, *, /, ^
-(defrel zeropo (n) (== n '(INTERNAL-NUMBER)))
+(defrel zeropo (n)
+  (== n '(INTERNAL-NUMBER)))
+
 (defrel zeropo-fn (n o)
   (conde
    ((zeropo n) (== o t))
@@ -135,7 +142,9 @@ from the function.
    ((booleanpo n) (== o nil))))
 
 (defrel numberpo (n)
-  (fresh (e) (== n `(INTERNAL-NUMBER . ,e))))
+  (fresh (e)
+	 (== n `(INTERNAL-NUMBER . ,e))))
+
 (defrel numberpo-fn (n o)
   (conde
    ((numberpo n) (== o t))
@@ -165,12 +174,8 @@ from the function.
 	 (== o `(INTERNAL-NUMBER . ,c))
 	 (*o a b c)))
 
-(defrel do-expo (n m o)
-  (fresh (a b c)
-	 (== n `(INTERNAL-NUMBER . ,a))
-	 (== m `(INTERNAL-NUMBER . ,b))
-	 (== o `(INTERNAL-NUMBER . ,c))
-	 (expo a b c)))
+(defrel do-sqro (n o)
+  (do-timeso n n o))
 
 ;;; less than and leq as pure goals
 (defrel do-less-than-o (n m)
@@ -185,6 +190,13 @@ from the function.
 	 (== m `(INTERNAL-NUMBER . ,b))
 	 (<=o a b)))
 
+
+(defrel do-greater-than-o (n m)
+  (do-less-than-o m n))
+
+(defrel do-greater-than-equal-o (n m)
+  (do-less-than-equal-o m n))
+
 ;; versions that return t and nil
 (defrel do-less-than-o-fn (n m o)
   (conde
@@ -195,3 +207,15 @@ from the function.
   (conde
    ((do-less-than-equal-o n m) (== o 't))
    ((do-less-than-o m n) (== o 'nil))))
+
+(defrel do-greater-than-o-fn (n m o)
+  (conde
+   ((do-less-than-o m n) (== o 't))
+   ((do-less-than-equal-o n m) (== o 'nil))))
+
+(defrel do-greater-than-equal-o-fn (n m o)
+  (conde
+   ((do-less-than-equal-o m n) (== o 't))
+   ((do-less-than-o n m) (== o 'nil))))
+
+

@@ -1,8 +1,8 @@
 (in-package "ACL2S")
 
 
-(load "interp-raw.lsp")
-(load "to-acl2-raw.lsp")
+;(load "interp-raw.lsp")
+;(load "to-acl2-raw.lsp")
 
 ;(load "itest-cgen.lisp")
 ;(load "itest-ithm.lisp")
@@ -63,7 +63,7 @@
    ((booleanp exp) exp)
    ((symbolp exp) (build-sym exp))
    ((natp exp) (build-num exp))
-   ((not (consp exp)) (error "What is this? ~a" exp))
+   ((not (consp exp)) (random 10))
    ((equal (car exp) 'quote)
     (clean-val (cadr exp)))
    ((consp exp)
@@ -260,9 +260,12 @@ The keywords for suggest-lemma are:
    (t (include-all-vars (cons `(allp ,(car vs)) hyps) (cdr vs)))))
 
 (defun get-hyps (form)
-  (find-hyps form)
-  (mapcar #'(lambda (e) (make-ex e 'or))
-	  (cadr (@ result))))
+  (cond
+   ((symbolp form) nil)
+   (t
+    (find-hyps form)
+    (mapcar #'(lambda (e) (make-ex e 'or))
+	    (cadr (@ result))))))
 
 
 (defun subsumed? (e1 e2)
@@ -283,6 +286,12 @@ The keywords for suggest-lemma are:
       (if (@ result)
 	  (simplify-hyps (cdr hyps) seen)
 	  (simplify-hyps (cdr hyps) (cons (car hyps) seen))))))
+
+(defun remove-allp-hyps (hyps)
+  (remove-if-not
+   #'(lambda (e)
+       (not (and (consp e) (equal (car e) 'allp))))
+		 hyps))
 
 ;; using itest?
 (defun test-gen (hyps)
@@ -311,6 +320,23 @@ The keywords for suggest-lemma are:
   (final-test `(and . ,hyps) from to)
   (@ result))
 
+(defun final-statement (hyps start form)
+  (let* ((hyps (remove-allp-hyps hyps))
+	 (msg (if (equal start form)
+		  "Please provide more constraints on the expression you would like me to find. The best I can do is:"
+		"We found the following potential theorem:"))
+	 (res (cond
+	       ((endp hyps) `(equal ,start ,form))
+	       ((equal (length hyps) 1)
+		`(implies ,(car hyps) (equal ,start ,form)))
+	       (t `(implies (and . ,hyps)
+			    (equal ,start ,form))))))
+    (cw "***********Beginning of Synthesis Output*****************")
+    (print msg)
+    (print "")
+    res))
+
+
 (defun suggest-lemma-loop (i forms hyps start tests)
   (if (>= i 5)
       (list "COULDN'T FIND A SOLUTION!"
@@ -319,18 +345,26 @@ The keywords for suggest-lemma are:
 	   (new-tests (mapcar #'clean-tests cleaned-tests))
 	   (results (mapcar #'clean-val
 			    (eval-all start cleaned-tests))))
+      (print "testing:")
+      (print `(find-equivalent ',forms
+			       q
+			       ',new-tests
+			       ',results))
       (let ((form
 	     (read-back
 	      (eval `(car (run 1 q (find-equivalent ',forms
 						    q
 						    ',new-tests
 						    ',results)))))))
+	(print "done testing that.")
 	(get-final hyps start form)
 	(let ((res (@ result)))
 	  (if (not (car (@ result)))
-	      (list "FOUND" `(implies (and . ,hyps) (equal ,start ,form)) "IN" i "TRIES!")
+	      (final-statement hyps start form)
 	    (suggest-lemma-loop (+ i 1) forms hyps start
 				(append (cdadr (@ result)) tests))))))))
+
+
 
 (defun suggest-lemma-inner (start xargs)
   (multiple-value-bind
@@ -357,11 +391,9 @@ The keywords for suggest-lemma are:
      (suggest-lemma-loop 1 new-forms hyps start (cdadr (@ result))))))
 
 (defun all-lines ()
-  (list 'var
-    'boolean 'symbol 'number 'cons
-    '+ '- '* 'exp '< '<= '> '>=
-    'car 'cdr 'append 'reverse
-    'let))
+  (append 
+   '(var boolean symbol number cons car cdr let if cond)
+   (mapcar #'car *interp-built-ins*)))
 
 (defun all-groups () '(all-lines))
       

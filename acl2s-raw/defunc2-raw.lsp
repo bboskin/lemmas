@@ -13,13 +13,6 @@
       (eval `(defrel ,new-name ,(append vars (list new-output))
 	       ,a)))))
 
-(defun all-lines ()
-  '(var
-    boolean symbol number cons
-    + - * exp < <= > >=
-    car cdr append reverse
-    let))
-
 (defun gen-rel-inner (name vars body state)
   (progn
     (add-to-interpreter name (get-rel-name name) (len vars))
@@ -27,23 +20,6 @@
     (mv nil nil state)))
 
 ;;;;; Creating new clauses for relational ACL2s interpreter
-
-(defun new-clause (num-args vars pmatch recursive-calls final)
-  (cond
-   ((= num-args 0)
-    `((fresh ,vars
-	     (== expr ,pmatch)
-	     ,@recursive-calls
-	     (,@final o))))
-   (t (let ((subexpr (next-var))
-	    (subres (next-var)))
-	(let ((new-vars `(,@vars ,subexpr ,subres))
-	      (new-pmatch `(,@pmatch ,subexpr))
-	      (new-rec-calls
-	       `(,@recursive-calls (value-of ,subexpr ρ ,subres)))
-	      (new-final `(,@final ,subres)))
-	  (new-clause
-	   (- num-args 1) new-vars new-pmatch new-rec-calls new-final))))))
 
 (defun has-arity-clause (name n)
   `((== form ',name) (== n ,n)))
@@ -69,29 +45,9 @@
 
 
 #|
-(defunc2 rev-acc (ls acc)
-  :input-contract (and (true-listp ls) (true-listp acc))
-  :output-contract t
-  (cond
-   ((endp ls) acc)
-   (t (rev-acc (cdr ls) (cons (car ls) acc)))))
-|#
-
-
-#|
-(acl2s-query
- '(defun rev-acc (ls acc)
-    (declare (xargs :guard (and (true-listp ls)
-				(true-listp acc))))
-    (cond
-     ((endp ls) acc)
-     (t (rev-acc (cdr ls) (cons (car ls) acc))))))
-
-(acl2s-query '(progn (defun foo14 (e acc)
-		       (declare (xargs :mode :program))
-		       (if e (foo14 nil (cons e acc)) acc))))
-
-(acl2s-query '(verify-guards foo13))
-
-(acl2s-query '(defthm foo (implies (natp n) (integerp n))))
-|#
+((FRESH (|fresh-var13| |fresh-var14| |fresh-var15| |fresh-var16| |fresh-var17| |fresh-var18|)
+	(== EXPR (LIST 'NOT-LESS-THAN |fresh-var13| |fresh-var15| |fresh-var17|))
+	(VALUE-OF |fresh-var13| ρ |fresh-var14|)
+	(VALUE-OF |fresh-var15| ρ |fresh-var16|)
+	(VALUE-OF |fresh-var17| ρ |fresh-var18|)
+	(NOT-LESS-THAN-REL |fresh-var14| |fresh-var16| |fresh-var18| O)))|#

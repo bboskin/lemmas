@@ -1,4 +1,4 @@
-(load "helpers-raw.lsp")
+;(load "helpers-raw.lsp")
 
 #|
 This file implements a compiler from functional programs
@@ -7,7 +7,7 @@ to relational programs. The grammar of the language supported is:
 Expr := Number | t | nil
      | (cons Expr Expr) | (car Expr) | (cdr Expr)
      | (append Expr Expr) | (reverse Expr)
-     | (+ Expr Expr) | (- Expr Expr) | (* Expr Expr) | (/ Expr Expr) | (exp Expr Expr)
+     | (+ Expr Expr) | (- Expr Expr) | (* Expr Expr) | (sqr Expr)
      | (endp Expr) | (booleanp Expr) | (numberp Expr) | (varp Expr)
      | (consp Expr) | (true-listp Expr) | (listp Expr)
      | (cond (Expr Expr)*) | (if Expr Expr Expr)
@@ -23,18 +23,18 @@ Expr := Number | t | nil
 ;; Go: a guard to decide if recursion is necessary.
 (defun miniKanrenize-go (e)
   (cond
-   ((symbolp e) (list nil e))
-   ((numberp e) (list nil (build-num e)))
+   ((symbolp e) `(nil ,e))
+   ((numberp e) `(nil ',(build-num e)))
    (t (let ((v (next-var)))
 	(list t v (miniKanrenize e v))))))
 
 ;; compile-recur: takes the inputs which may or may not have required
 ;; recursion, and introduce the necessary fresh variables
 ;; for miniKanrenize-bool, dest is nil (and otherwise guaranteed to be non-nil)
-(defun complete-recursion-inner (form vars dest es work)
+(defun complete-recursion-inner (form vars dest es work has-dest?)
   (cond
    ((endp es)
-    (if dest
+    (if has-dest?
 	(if vars `(fresh ,vars ,@work (,@form ,dest))
 	  `(,@form ,dest))
       (if vars `(fresh ,vars ,@work ,form) form)))
@@ -43,14 +43,16 @@ Expr := Number | t | nil
 	    (complete-recursion-inner `(,@form ,(cadr curr))
 				(cons (cadr curr) vars)
 				dest (cdr es)
-				(cons (caddr curr) work))
+				(cons (caddr curr) work)
+				has-dest?)
 	  (complete-recursion-inner `(,@form ,(cadr curr))
-			      vars dest (cdr es) work))))))
+				    vars dest (cdr es) work
+				    has-dest?))))))
 
 (defun complete-recursion (form dest es)
-  (complete-recursion-inner form nil dest es nil))
+  (complete-recursion-inner form nil dest es nil t))
 (defun complete-recursion-bool (form es)
-  (complete-recursion-inner form nil nil es nil))
+  (complete-recursion-inner form nil nil es nil nil))
 
 ;; The main function to create miniKanren expressions.
 ;; These forms are expected to return a value.
@@ -60,7 +62,7 @@ Expr := Number | t | nil
 (defparameter built-ins
   '((cons 2 conso) (car 1 caro) (cdr 1 cdro)
     (append 2 appendo) (reverse 1 reverso)
-    (+ 2 do-pluso) (- 2 do-minuso) (* 2 do-timeso) (exp 2 do-expo)
+    (+ 2 do-pluso) (- 2 do-minuso) (* 2 do-timeso) (sqr 1 do-sqro)
     (< 2 do-less-than-o-fn) (<= 2 do-less-than-equal-o-fn)
     (> 2 do-greater-than-o-fn) (>= 2 do-greater-than-equal-o-fn)
     (and nil ando) (or nil oro) (not 1 noto)
@@ -82,9 +84,9 @@ Expr := Number | t | nil
   (cond
    ;; base cases
    ((booleanp expr) `(== ,expr ,dest))
-   ((numberp expr) `(== ,(build-num expr) ,dest))
+   ((numberp expr) `(== ',(build-num expr) ,dest))
    ((symbolp expr) `(== ,expr ,dest))
-   ((has-form 'quote expr) `(== ,(build-sym expr) ,dest))
+   ((has-form 'quote expr) `(== ',(build-sym expr) ,dest))
    ;; Special cases: let, cond, and user-defind functions
    ;; let
    ((has-form 'let expr) (miniKanrenize-let expr dest))
@@ -104,7 +106,7 @@ Expr := Number | t | nil
 ;; conditionals
 (defun miniKanrenize-cond (lines dest)
   (cond
-   ((endp lines) `(((fail))))
+   ((endp lines) '(((fail))))
    (t (let ((line1 (car lines)))
 	(if line1
 	    (cons

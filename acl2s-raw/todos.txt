@@ -1,0 +1,18 @@
+;;;; NUMBERS
+
+-- implement integers and rationals
+-- exp -> sqr
+
+
+;;;; BOOLEANS
+
+-- fix not (will be solved by expanding interpreter)
+
+;;;; INTERPRETER
+
+-- make it so  compiled lang = interpreted lang
+-- add more recognizers (natp, integerp, rationalp) once NUMBERS is finished
+
+;;;; General Capabilities
+
+-- iff, not just equal?
