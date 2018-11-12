@@ -5,7 +5,20 @@
   My implementation differs from the typical version, because
   they have a tag at the front. This will make reading numbers 
   back to decimal easier, because numbers will be easily detectable from
-lists of numerals or fresh variables.|#
+lists of numerals or fresh variables.
+
+
+Edit:
+
+In addition, I add support for integers and rational numbers.
+
+In addition to a tag at the front, each miniKanren number has 
+a sign (0 means positive, 1 means negative).
+Rational numbers have, instead of a sign tag, the tag 'RATIONAL, and follow
+this form:
+
+`(INTERNAL-NUMBER RATIONAL ,numerator ,denominator)
+|#
 
 (defun div2 (n)
   (cond
@@ -300,10 +313,35 @@ lists of numerals or fresh variables.|#
 
 ;;; User forms
 
+#|
+;; old version when only nats were supported
 (defun build-num (n)
   (cons 'INTERNAL-NUMBER (build-num-in n)))
 
 (defun read-back-num (n)
   (if (and (consp n) (equal (car n) 'INTERNAL-NUMBER))
       (read-back-inner (cdr n))
+    n))
+|#
+
+;; new versions
+(defun build-num (n)
+  (cond
+   ((natp n) (list* 'INTERNAL-NUMBER '(0) (build-num-in n)))
+   ((integerp n) (list* 'INTERNAL-NUMBER '(1) (build-num-in (abs n))))
+   ((rationalp n) (list 'INTERNAL-NUMBER '(RATIONAL)
+			 (build-num (acl2s::numerator n))
+			 (build-num (acl2s::denominator n))))))
+
+(defun read-back-num (n)
+  (if (and (consp n) (equal (car n) 'INTERNAL-NUMBER))
+      (cond
+       ((equal (cadr n) '(0))
+	(read-back-inner (cddr n)))
+       ((equal (cadr n) '(1))
+	(* -1 (read-back-inner (cddr n))))
+       ((equal (cadr n) '(RATIONAL))
+	(let ((numerator (read-back-num (caddr n)))
+	      (denominator (read-back-num (cadddr n))))
+	  (if (zerop denominator) 0 (/ numerator denominator)))))
     n))

@@ -44,8 +44,12 @@
     (append 2 appendo) (reverse 1 reverso)
     (and 2 ando) (or 2 oro) (not 1 noto)
     (booleanp 1 booleanpo-fn) (symbolp 1 symbolpo-fn)
-    (numberp 1 numberpo-fn) (varp 1 varpo-fn) (consp 1 conspo-fn)
-    (endp 1 endpo-fn) (zerop 1 zeropo-fn)))
+    (varp 1 varpo-fn) (consp 1 conspo-fn) (endp 1 endpo-fn) 
+    ;; new numbers
+    (zerop 1 zeropo-fn) (numberp 1 numberpo-fn)
+    (natp 1 natpo-fn) (negp 1 negpo-fn) (intp 1 intpo-fn)
+    (rationalp 1 rationalp-fn) (numerator 1 numeratoro)
+    (denominator 1 denominatoro)))
 
 (defun new-clause (num-args vars pmatch recursive-calls final)
   (cond
@@ -80,8 +84,11 @@
     ((numberpo expr) (== o expr))
     ;; cons, car, cdr are hard-coded since they are non-recursive, meaning
     ;; that doing the helper function first is better
-    ((fresh (a d res1 res2) (== expr `(cons ,a ,d)) (conso res1 res2 o)
-	    (value-of a ρ res1) (value-of d ρ res2)))
+    ((fresh (a d res1 res2)
+	    (== expr `(cons ,a ,d))
+	    (conso res1 res2 o)
+	    (value-of a ρ res1)
+	    (value-of d ρ res2)))
     ((fresh (pr res) (== expr `(car ,pr)) (caro res o) (value-of pr ρ res)))
     ((fresh (pr res) (== expr `(cdr ,pr)) (cdro res o) (value-of pr ρ res)))
     ;; More complex build-ins (let, if, cond)
@@ -100,33 +107,6 @@
 	    (do-cond es ρ o)))
     ;; everything else -- standard recursion & completion
     . ,(mapcar #'make-init-value-of-clause *interp-built-ins*)))
-#|
-(defun expr-for-value-of ()
-  '(conde
-    ;; environment lookup
-    ((lookupo expr ρ o))
-    ;; constants, cons car cdr
-    ((booleanpo expr) (== o expr))
-    ((varpo expr) (== o expr))
-    ((numberpo expr) (== o expr))
-    ((fresh (a d res1 res2)
-	    (== expr `(cons ,a ,d))
-	    (conso res1 res2 o)
-	    (value-of a ρ res1)
-	    (value-of d ρ res2)))
-    ((fresh (pr res)
-	    (== expr `(car ,pr))
-	    (caro res o)
-	    (value-of pr ρ res)))
-    ((fresh (pr res)
-	    (== expr `(cdr ,pr))
-	    (cdro res o)
-	    (value-of pr ρ res)))
-    ;; EVERYTHING BELOW CAN BE REPLACED
- 
-    ;; Let, conditionals
-    ))
-|#
 
 (defun all-lines ()
   (append 

@@ -42,12 +42,3 @@
 	       ,(expr-for-value-of)))
       (eval `(defrel has-arity (form n)
 	       ,(expr-for-has-arity))))))
-
-
-#|
-((FRESH (|fresh-var13| |fresh-var14| |fresh-var15| |fresh-var16| |fresh-var17| |fresh-var18|)
-	(== EXPR (LIST 'NOT-LESS-THAN |fresh-var13| |fresh-var15| |fresh-var17|))
-	(VALUE-OF |fresh-var13| ρ |fresh-var14|)
-	(VALUE-OF |fresh-var15| ρ |fresh-var16|)
-	(VALUE-OF |fresh-var17| ρ |fresh-var18|)
-	(NOT-LESS-THAN-REL |fresh-var14| |fresh-var16| |fresh-var18| O)))|#

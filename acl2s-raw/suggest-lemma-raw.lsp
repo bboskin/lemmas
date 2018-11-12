@@ -9,17 +9,25 @@
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; Forms to create valid expressions
 
-;; creating numbers. All numbers are coerced into being natural numbers,
-;; and in addition all non-number, non-symbol, non-boolean atoms are coerced
-;; into being natural numbers. This may change later, but may not.
+;; We now have support for rational numbers!
+;; But, certain operations are slow for rationals with large num/denoms,
+;; so (hopefully only for now) we use mod.
+
+
+(defun simplify-numbers (n)
+  n
+  #|(cond
+   ((natp n) (mod n 20))
+   ((negp n) (* -1 (mod n 20)))
+   ((rationalp n) (/ (mod (numerator n) 20)
+		     (+ 1 (mod (denominator n) 20))))
+   (t 0))|#)
 
 (defun fix-atom (e)
   (cond
    ((symbolp e) e)
-   ((integerp e) (build-num (abs e)))
-   ((rationalp e) (build-num (denominator e)))
-   ;; strings, chars, and complex numbers become random numbers
-   (t (build-num (random 10)))))
+   ;; strings, chars, and complex numbers become 0
+   (t (build-num (simplify-numbers e)))))
 
 
 ;; add tags to quoted values, creating valid expressions
@@ -47,31 +55,30 @@
 (defun elim-bad-atoms-and-quote (exp)
   (cond
    ((symbolp exp) exp)
-   ((integerp exp) (abs exp))
-   ((rationalp exp) (abs (+ (numerator exp) (denominator exp))))
-   ((not (consp exp)) (random 10))
+   ((not (consp exp)) (simplify-numbers exp))
    ((equal (car exp) 'quote) (elim-bad-atoms-and-quote (cadr exp)))
    (t (cons (elim-bad-atoms-and-quote (car exp))
 	    (elim-bad-atoms-and-quote (cdr exp))))))
 
 (defun coerce-val (pr)
   (list (car pr) (elim-bad-atoms-and-quote (cadr pr))))
-(defun coerce-tests (tests) (mapcar #'coerce-val tests))
+
+(defun coerce-tests (tests)
+  (mapcar #'coerce-val tests))
 
 (defun clean-val (exp)
   (cond
    ((booleanp exp) exp)
    ((symbolp exp) (build-sym exp))
-   ((natp exp) (build-num exp))
-   ((not (consp exp)) (random 10))
-   ((equal (car exp) 'quote)
-    (clean-val (cadr exp)))
+   ((not (consp exp)) (fix-atom exp))
+   ((equal (car exp) 'quote) (clean-val (cadr exp)))
    ((consp exp)
     (list 'INTERNAL-CONS (clean-val (car exp))
 	  (clean-val (cdr exp))))))
 
 (defun clean-pr (pr)
   (list (car pr) (clean-val (cadr pr))))
+
 (defun clean-tests (alist) (mapcar #'clean-pr alist))
 
 ;;; Takes synthesized expressions, and removes evidence
@@ -267,7 +274,6 @@ The keywords for suggest-lemma are:
     (mapcar #'(lambda (e) (make-ex e 'or))
 	    (cadr (@ result))))))
 
-
 (defun subsumed? (e1 e2)
   (let ((state *the-live-state*))
     (declare (stobjs state))
@@ -356,15 +362,12 @@ The keywords for suggest-lemma are:
 						    q
 						    ',new-tests
 						    ',results)))))))
-	(print "done testing that.")
 	(get-final hyps start form)
 	(let ((res (@ result)))
 	  (if (not (car (@ result)))
 	      (final-statement hyps start form)
 	    (suggest-lemma-loop (+ i 1) forms hyps start
 				(append (cdadr (@ result)) tests))))))))
-
-
 
 (defun suggest-lemma-inner (start xargs)
   (multiple-value-bind

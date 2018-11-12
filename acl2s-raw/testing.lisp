@@ -44,7 +44,7 @@
   (if a nil t))
 
 (suggest-lemma a
-	       :required-expressions if-test2
+	       :required-expressions not if-test2
 	       :with not
 	       :hyps (booleanp a))
 
@@ -284,47 +284,41 @@
 
 ;; number stuff
 (defunc2 my-+ (a b)
-  :input-contract (and (rationalp a) (rationalp b))
-  :output-contract (rationalp (my-+ a b))
+  :input-contract (and (integerp a) (integerp b))
+  :output-contract (integerp (my-+ a b))
   (+ a b))
 
 (suggest-lemma (my-+ a b) :required-expressions +)
 
 (defunc2 my-- (a b)
-  :input-contract (and (rationalp a) (rationalp b)
-		       (>= (abs a) (abs b)))
-  :output-contract (rationalp (my-- a b))
-  (- a b))
+     :input-contract (and (integerp a) (integerp b))
+     :output-contract (integerp (my-- a b))
+     (- a b))
 
 (suggest-lemma (my-- a b)
 	       :required-expressions -
 	       :hyps (natp a) (natp b))
 
 (defunc2 my-* (a b)
-  :input-contract (and (natp a) (natp b))
-  :output-contract (natp (my-* a b))
+  :input-contract (and (integerp a) (integerp b))
+  :output-contract (integerp (my-* a b))
   (* a b))
 
 (suggest-lemma (my-* a b) :required-expressions *)
 
 (defunc2 my-gt (a b)
-  :input-contract (and (rationalp a) (rationalp b))
+  :input-contract (and (integerp a) (integerp b))
   :output-contract (booleanp (my-gt a b))
   (> a b))
 
 (suggest-lemma (my-gt a b) :required-expressions >)
 
 (defunc2 my-lt (a b)
-  :input-contract (and (rationalp a) (rationalp b))
+  :input-contract (and (integerp a) (integerp b))
   :output-contract (booleanp (my-lt a b))
   (< a b))
 
 (suggest-lemma (my-lt a b) :required-expressions <)
-
-(defunc my-lte (a b)
-  :input-contract (and (rationalp a) (rationalp b))
-  :output-contract (booleanp (my-lte a b))
-  (<= a b))
 
 (suggest-lemma (my-lte a b) :required-expressions <=)
 
@@ -333,8 +327,13 @@
   :output-contract (booleanp (my-gte a b))
   (>= a b))
 
-(suggest-lemma (my-gte a b) :required-expressions >=)
+(defunc my-gte2 (a b)
+  :input-contract (and (integerp a) (integerp b))
+  :output-contract (booleanp (my-gte2 a b))
+  (>= a b))
 
-;;;;;;;;;;;;;;;;;;;;
+(suggest-lemma (my-gte2 a b) :required-expressions >=)
 
-;; list stuff
+(suggest-lemma (my-gte2 a b)
+	       :required-expressions my-lt
+	       :with not)

@@ -1,21 +1,5 @@
 ;(load "helpers-raw.lsp")
 
-#|
-This file implements a compiler from functional programs
-to relational programs. The grammar of the language supported is:
-
-Expr := Number | t | nil
-     | (cons Expr Expr) | (car Expr) | (cdr Expr)
-     | (append Expr Expr) | (reverse Expr)
-     | (+ Expr Expr) | (- Expr Expr) | (* Expr Expr) | (sqr Expr)
-     | (endp Expr) | (booleanp Expr) | (numberp Expr) | (varp Expr)
-     | (consp Expr) | (true-listp Expr) | (listp Expr)
-     | (cond (Expr Expr)*) | (if Expr Expr Expr)
-     | (and Expr Expr) | (or Expr Expr) | (not Expr)
-     | (let ((symbol Expr)) Expr)
-     | (symbol Expr*) ;; <- calls to user-defined-fns + recursion
-|#
-
 ;; Just a function for a common idiom
 (defun has-form (s e)
   (and (consp e) (equal (car e) s)))
@@ -67,8 +51,13 @@ Expr := Number | t | nil
     (> 2 do-greater-than-o-fn) (>= 2 do-greater-than-equal-o-fn)
     (and nil ando) (or nil oro) (not 1 noto)
     (booleanp 1 booleanpo-fn) (symbolp 1 symbolpo-fn)
-    (numberp 1 numberpo-fn) (varp 1 varpo-fn) (consp 1 conspo-fn)
-    (endp 1 endpo-fn) (zerop 1 zeropo-fn) (symbolp 1 symbolpo-fn)))
+    (varp 1 varpo-fn) (consp 1 conspo-fn) (symbolp 1 symbolpo-fn)
+    (endp 1 endpo-fn)
+    ;; numbers (has changed)
+    (zerop 1 zeropo-fn) (numberp 1 numberpo-fn)
+    (natp 1 natpo-fn) (intp 1 intpo-fn) (posp 1 pospo-fn)
+    (negp 1 negpo-fn) (rationalp 1 rationalp-fn)
+    (numerator 1 numeratoro) (denominator 1 denominatoro)))
 
 (defun do-rec (form es dest)
   (let ((es (mapcar #'miniKanrenize-go es))
@@ -154,9 +143,13 @@ Expr := Number | t | nil
 (defparameter built-ins-bool
   '((equal 2 ==)
     (varp 1 varpo) (booleanp 1 booleanpo) (symbolp 1 symbolpo) (endp 1 endpo)
-    (numberp 1 numberpo) (zerop 1 zeropo) (consp 1 conspo)
+    (consp 1 conspo)
     (< 2 do-less-than-o) (<= 2 do-less-than-equal-o)
-    (> 2 do-greater-than-o) (>= 2 do-greater-than-equal-o)))
+    (> 2 do-greater-than-o) (>= 2 do-greater-than-equal-o)
+    ;; numbers (has changed)
+    (zerop 1 zeropo) (numberp 1 numberpo)
+    (natp 1 natpo) (intp 1 intpo) (posp 1 pospo)
+    (negp 1 negpo) (rationalp 1 rationalp)))
 
 (defun do-rec-bool (form es)
   (let ((es (mapcar #'miniKanrenize-go es))

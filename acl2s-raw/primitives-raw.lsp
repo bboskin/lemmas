@@ -129,67 +129,312 @@ from the function.
    ((non-nilo e) (== o nil))
    ((== e nil) (== o t))))
 
-;; The arithmetic operations: zerop, numberp, +, -, *, /, ^
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; NEW NUMBER STUFF
+
+
+;; predicates for new number representations
+
 (defrel zeropo (n)
-  (== n '(INTERNAL-NUMBER)))
+  (== n '(INTERNAL-NUMBER (0))))
 
 (defrel zeropo-fn (n o)
   (conde
    ((zeropo n) (== o t))
-   ((do-less-than-o '(INTERNAL-NUMBER) n) (== o nil))
+   ((pospo n) (== o nil))
+   ((negpo n) (== o nil))
+   ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
    ((varpo n) (== o nil))
    ((booleanpo n) (== o nil))))
 
-(defrel numberpo (n)
+(defrel natpo (n)
   (fresh (e)
-	 (== n `(INTERNAL-NUMBER . ,e))))
+    (== n `(INTERNAL-NUMBER (0) . ,e))))
 
-(defrel numberpo-fn (n o)
+(defrel natpo-fn (n o)
   (conde
-   ((numberpo n) (== o t))
+   ((natpo n) (== o t))
+   ((negpo n) (== o nil))
+   ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
    ((varpo n) (== o nil))
    ((booleanpo n) (== o nil))))
 
+
+(defrel pospo (n)
+  (fresh (e)
+    (fresh (a d) (== e `(,a . ,d)))
+    (== n `(INTERNAL-NUMBER (0) . ,e))))
+
+(defrel pospo-fn (n o)
+  (conde
+   ((pospo n) (== o t))
+   ((zeropo n) (== o nil))
+   ((negpo n) (== o nil))
+   ((rationalp-exclu n) (== o nil))
+   ((conspo n) (== o nil))
+   ((varpo n) (== o nil))
+   ((booleanpo n) (== o nil))))
+
+(defrel negpo (n)
+  (fresh (e)
+    (fresh (a d) (== e `(,a . ,d)))
+    (== n `(INTERNAL-NUMBER (1) . ,e))))
+
+(defrel nego-fn (n o)
+  (conde
+   ((natpo n) (== o nil))
+   ((negpo n) (== o t))
+   ((rationalp-exclu n) (== o nil))
+   ((conspo n) (== o nil))
+   ((varpo n) (== o nil))
+   ((booleanpo n) (== o nil))))
+
+(defrel intpo (n)
+  (conde
+   ((natpo n))
+   ((negpo n))))
+
+(defrel nego-fn (n o)
+  (conde
+   ((intpo n) (== o t))
+   ((rationalp-exclu n) (== o nil))
+   ((conspo n) (== o nil))
+   ((varpo n) (== o nil))
+   ((booleanpo n) (== o nil))))
+
+(defrel rationalp-exclu (n)
+  (fresh (numer denom)
+    (== n `(INTERNAL-NUMBER (RATIONAL) ,numer ,denom))
+    (intpo numer)
+    (intpo denom)))
+
+(defrel rationalpo (n)
+  (conde
+   ((intpo n))
+   ((rationalp-exclu n))))
+
+(defrel rationalpo-fn (n o)
+  (conde
+   ((rationalpo n) (== o t))
+   ((conspo n) (== o nil))
+   ((varpo n) (== o nil))
+   ((booleanpo n) (== o nil))))
+
+
+;; numbers are just rationals, here
+(defrel numberpo (n) (rationalpo n))
+
+(defrel numberpo-fn (n o) (rationalpo-fn n o))
+
+;; simplifying rationals so that checking for zero, etc, doesn't get hard
+(defrel new-sign (s1 s2 o)
+  (conde
+   ((== s1 s2) (== o 0))
+   ((conde
+     ((== s1 1) (== s2 0))
+     ((== s1 0) (== s2 1)))
+    (== o 1))))
+
+(defrel find-min (n m o)
+  (conde
+   ((<o n m) (== o n))
+   ((<=o m n) (== o m))))
+
+(defrel sub1o (n o)
+  (conde
+   ((== n '(1)) (== o nil))
+   ((fresh (b1 b)
+	   (== n `(,b1 . ,b))
+	   (conde
+	    ((== b1 1) (== o `(0 . ,b)))
+	    ((== b1 0)
+	     (fresh (o^)
+		    (sub1o b o^)
+		    (== o `(1 . ,o^)))))))))
+
+
+(defrel gcf (a b c f new-a new-b)
+  (conde
+   ((== c '(1)) (== f '(1)) (== new-a a) (== new-b b))
+   ((fresh (q-a r-a q-b r-b c-1)
+      (fresh (b1 b2 bs) (== c `(,b1 ,b2 . ,bs)))
+      (/o a c q-a r-a)
+      (/o b c q-b r-b)
+      (conde
+       ((== r-a nil) (== r-b nil) (== f c) (== q-a new-a) (== q-b new-b))
+       ((conde
+	 ((fresh (bit bs) (== r-a `(,bit . ,bs))))
+	 ((fresh (bit bs) (== r-b `(,bit . ,bs)))))
+	(sub1o c c-1)
+	(gcf a b c-1 f new-a new-b)))))))
+
+(defrel simplifyo (n o)
+  (conde
+   ((intpo n) (== n o))
+   ((fresh (sgn d)
+	   (== n `(INTERNAL-NUMBER (RATIONAL)
+				   (INTERNAL-NUMBER (,sgn))
+				   ,d))
+	   (== o '(INTERNAL-NUMBER (0)))))
+   ((fresh (numer n-sgn denom d-sgn quot rem sgn)
+	   (== n `(INTERNAL-NUMBER (RATIONAL)
+				   (INTERNAL-NUMBER (,n-sgn) . ,numer)
+				   (INTERNAL-NUMBER (,d-sgn) . ,denom)))
+	   (new-sign n-sgn d-sgn sgn)
+	   (fresh (bit bs min f new-n new-m)
+		  (== rem `(,bit . ,bs))
+		  (find-min numer denom min)
+		  (gcf numer denom min f new-n new-m)
+		  (conde
+		   ((== new-m '(1))
+		    (== o `(INTERNAL-NUMBER (,sgn) . ,new-n)))
+		   ((fresh (bit1 bit2 bs)
+			   (== new-m `(,bit1 ,bit2 . ,bs)))
+		    (== o `(INTERNAL-NUMBER (RATIONAL)
+					    (INTERNAL-NUMBER (,sgn) . ,new-n)
+					    (INTERNAL-NUMBER (0) . ,new-m))))))))))
+
+(defmacro test-simp (n)
+  `(read-back-num (car (run 1 q (simplifyo (build-num ,n) q)))))
+
+
+;; helper functions for dealing with rationals
+(defrel coerce-to-rational (n o)
+  (conde
+   ((rationalp-exclu n) (== n o))
+   ((intpo n) (== o `(INTERNAL-NUMBER (RATIONAL) ,n
+				     (INTERNAL-NUMBER (0) 1))))))
+
+(defrel negate (n n-)
+  (fresh (sgn e)
+    (== n `(INTERNAL-NUMBER (,sgn) . ,e))
+    (conde
+     ((== sgn 0) (== n- `(INTERNAL-NUMBER (1) . ,e)))
+     ((== sgn 1) (== n- `(INTERNAL-NUMBER (0) . ,e)))
+     ((== sgn 'RATIONAL)
+      (fresh (num denom num-)
+	     (== e `(,num ,denom))
+	     (negate num num-)
+	     (== n- `(INTERNAL-NUMBER (RATIONAL) ,num- ,denom)))))))
+
+(defrel numeratoro (n o)
+  (conde
+   ((intpo n) (== o n))
+   ((fresh (denom)
+	   (== n `(INTERNAL-NUMBER (RATIONAL) ,o ,denom))))))
+
+(defrel denominatoro (n o)
+  (conde
+   ((intpo n) (== o '(INTERNAL-NUMBER (0))))
+   ((fresh (numer) (== n `(INTERNAL-NUMBER (RATIONAL) ,numer ,o))))))
+
+;; The arithmetic operations: zerop, numberp, +, -, *, /, sqr
+
+(defrel do-pluso-with-rationals (n m o)
+  (fresh (new-n new-m)
+    (coerce-to-rational n new-n)
+    (coerce-to-rational m new-m)
+    (fresh (n-num n-denom m-num m-denom cast-n cast-m C NUM)
+      (numeratoro new-n n-num) (denominatoro new-n n-denom)
+      (numeratoro new-m m-num) (denominatoro new-m m-denom)
+      (do-timeso n-denom m-denom C)
+      (do-timeso n-denom m-num cast-m)
+      (do-timeso m-denom n-num cast-n)
+      (do-pluso N M NUM)
+      (simplifyo `(INTERNAL-NUMBER (RATIONAL) ,NUM ,C) o))))
 
 (defrel do-pluso (n m o)
-  (fresh (a b c)
-	 (== n `(INTERNAL-NUMBER . ,a))
-	 (== m `(INTERNAL-NUMBER . ,b))
-	 (== o `(INTERNAL-NUMBER . ,c))
-	 (pluso a b c)))
+  (fresh (a a-tag b b-tag c c-tag)
+	 (== n `(INTERNAL-NUMBER (,a-tag) . ,a))
+	 (== m `(INTERNAL-NUMBER (,b-tag) . ,b))
+	 (== o `(INTERNAL-NUMBER (,c-tag) . ,c))
+	 (conde
+	  ((== a-tag 0) (== b-tag 0) (== c-tag 0) (pluso a b c))
+	  ((== a-tag 1) (== b-tag 1) (== c-tag 1) (poso c) (pluso a b c))
+	  ((== a-tag 1) (== b-tag 0) (== c-tag 1) (poso c) (minuso a b c))
+	  ((== a-tag 0) (== b-tag 1) (== c-tag 0) (minuso a b c))
+	  ((== a-tag 0) (== b-tag 1) (== c-tag 1) (poso c) (minuso b a c))
+	  ((== a-tag 1) (== b-tag 0) (== c-tag 0) (minuso b a c))
+	  ((== a-tag 'RATIONAL) (conde ((== b-tag 1)) ((== b-tag 0)))
+	   (do-pluso-with-rationals n m o))
+	  ((== b-tag 'RATIONAL) (conde ((== a-tag 1)) ((== a-tag 0)))
+	   (do-pluso-with-rationals n m o))
+	  ((== a-tag 'RATIONAL) (== b-tag 'RATIONAL)
+	   (do-pluso-with-rationals n m o)))))
 
 (defrel do-minuso (n m o)
-  (fresh (a b c)
-	 (== n `(INTERNAL-NUMBER . ,a))
-	 (== m `(INTERNAL-NUMBER . ,b))
-	 (== o `(INTERNAL-NUMBER . ,c))
-	 (minuso a b c)))
+  (fresh (m-) (negate m m-) (do-pluso n m- o)))
+
+(defrel do-timeso-with-rationals (n m o)
+  (fresh (new-n new-m)
+    (coerce-to-rational n new-n)
+    (coerce-to-rational m new-m)
+    (fresh (n-num n-denom m-num m-denom NUM DENOM)
+      (numeratoro new-n n-num) (denominatoro new-n n-denom)
+      (numeratoro new-m m-num) (denominatoro new-m m-denom)
+      (do-timeso n-num m-num NUM)
+      (do-timeso n-denom m-denom DENOM)
+      (simplifyo `(INTERNAL-NUMBER (RATIONAL) ,NUM ,DENOM) o))))
 
 (defrel do-timeso (n m o)
-  (fresh (a b c)
-	 (== n `(INTERNAL-NUMBER . ,a))
-	 (== m `(INTERNAL-NUMBER . ,b))
-	 (== o `(INTERNAL-NUMBER . ,c))
-	 (*o a b c)))
+  (fresh (a a-tag b b-tag c c-tag)
+    (== n `(INTERNAL-NUMBER (,a-tag) . ,a))
+    (== m `(INTERNAL-NUMBER (,b-tag) . ,b))
+    (== o `(INTERNAL-NUMBER (,c-tag) . ,c))
+    (conde
+     ((== a-tag 0) (== b-tag 0) (== c-tag 0) (*o a b c))
+     ((== a-tag 1) (== b-tag 1) (== c-tag 0) (*o a b c))
+     ((== a-tag 0) (== b-tag 1) (*o a b c)
+      (conde ((== c '()) (== c-tag 0))
+	     ((poso c) (== c-tag 1))))
+     ((== a-tag 1) (== b-tag 0) (*o a b c)
+      (conde ((== c '()) (== c-tag 0))
+	     ((poso c) (== c-tag 1))))
+     ((== a-tag 'RATIONAL) (conde ((== b-tag 1)) ((== b-tag 0)))
+      (do-timeso-with-rationals n m o))
+     ((== b-tag 'RATIONAL) (conde ((== a-tag 1)) ((== a-tag 0)))
+      (do-timeso-with-rationals n m o))
+     ((== a-tag 'RATIONAL) (== b-tag 'RATIONAL)
+      (do-timeso-with-rationals n m o)))))
 
-(defrel do-sqro (n o)
-  (do-timeso n n o))
+(defrel do-sqro (n o) (do-timeso n n o))
 
 ;;; less than and leq as pure goals
+;;; they assume that the numbers provided are simplified 
+
+(defrel do-less-than-o-with-rationals (n m)
+  (fresh (new-n new-m n-num n-denom m-num m-denom cast-n cast-m)
+    (coerce-to-rational n new-n)
+    (coerce-to-rational m new-m)
+    (numeratoro new-n n-num) (denominatoro new-n n-denom)
+    (numeratoro new-m m-num) (denominatoro new-m m-denom)
+    (do-timeso n-num m-denom cast-n)
+    (do-timeso m-num n-denom cast-m)
+    (do-less-than-o cast-n cast-m)))
+
 (defrel do-less-than-o (n m)
-  (fresh (a b)
-	 (== n `(INTERNAL-NUMBER . ,a))
-	 (== m `(INTERNAL-NUMBER . ,b))
-	 (<o a b)))
+  (fresh (n-sgn n- m-sgn m-)
+    (== n `(INTERNAL-NUMBER (,n-sgn) . ,n-))
+    (== m `(INTERNAL-NUMBER (,m-sgn) . ,m-))
+    (conde
+     ((== n-sgn 1) (== m-sgn 0))
+     ((== n-sgn 0) (== m-sgn 0) (<o n- m-))
+     ((== n-sgn 1) (== m-sgn 1) (<o m- n-))
+     ((== n-sgn 'RATIONAL)
+      (conde ((== m-sgn 0)) ((== m-sgn 1)))
+      (do-less-than-o-with-rationals n m))
+     ((== m-sgn 'RATIONAL)
+      (conde ((== n-sgn 0)) ((== n-sgn 1)))
+      (do-less-than-o-with-rationals n m))
+     ((== n-sgn 'RATIONAL) (== m-sgn 'RATIONAL)
+      (do-less-than-o-with-rationals n m)))))
 
 (defrel do-less-than-equal-o (n m)
-  (fresh (a b)
-	 (== n `(INTERNAL-NUMBER . ,a))
-	 (== m `(INTERNAL-NUMBER . ,b))
-	 (<=o a b)))
-
+  (conde ((== n m))
+	 ((do-less-than-o n m))))
 
 (defrel do-greater-than-o (n m)
   (do-less-than-o m n))
