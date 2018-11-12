@@ -284,15 +284,16 @@
 
 ;; number stuff
 (defunc2 my-+ (a b)
-  :input-contract (and (integerp a) (integerp b))
-  :output-contract (integerp (my-+ a b))
+  :input-contract (and (rationalp a) (rationalp b))
+  :output-contract (rationalp (my-+ a b))
   (+ a b))
 
-(suggest-lemma (my-+ a b) :required-expressions +)
+(suggest-lemma (my-+ a b)
+	       :required-expressions +)
 
 (defunc2 my-- (a b)
-     :input-contract (and (integerp a) (integerp b))
-     :output-contract (integerp (my-- a b))
+     :input-contract (and (rationalp a) (rationalp b))
+     :output-contract (rationalp (my-- a b))
      (- a b))
 
 (suggest-lemma (my-- a b)

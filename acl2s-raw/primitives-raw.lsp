@@ -249,13 +249,48 @@ from the function.
    ((fresh (b1 b)
 	   (== n `(,b1 . ,b))
 	   (conde
-	    ((== b1 1) (== o `(0 . ,b)))
+	    ((== b1 1) (poso b)
+	     (== o `(0 . ,b)))
 	    ((== b1 0)
 	     (fresh (o^)
 		    (sub1o b o^)
 		    (== o `(1 . ,o^)))))))))
 
+(defrel divides (a b n)
+  (conde
+   ((== a '()) (== n '()))
+   ((fresh (b1 bs)
+      (== a `(,b1 . ,bs))
+      (fresh (a-b n-1)
+	(pluso b a-b a)
+	(divides a-b b n-1)
+	(pluso '(1) n-1 n))))))
 
+;; this causes us to lose run*
+(defrel does-not-divide (sm a b)
+  (conde
+   ((<o sm b)
+    (fresh (k l)
+      (pluso sm a k)
+      (*o l b k)))
+   ((<o sm b)
+    (fresh (sm+1)
+      (pluso '(1) sm sm+1)
+      (does-not-divide sm+1 a b)))))
+
+
+(defrel do-simp (a b c new-a new-b)
+  (conde
+   ((== c '(1)) (== new-a a) (== new-b b))
+   ((fresh (q-a q-b c-1)
+      (fresh (b1 b2 bs) (== c `(,b1 ,b2 . ,bs)))
+      (conde
+       ((divides a c new-a) (divides b c new-b))
+       ;; this line below is unguarded, but makes the algorithm
+       ;; way faster, and still correct for a run 1
+       ((sub1o c c-1) (do-simp a b c-1 new-a new-b)))))))
+
+#|
 (defrel gcf (a b c f new-a new-b)
   (conde
    ((== c '(1)) (== f '(1)) (== new-a a) (== new-b b))
@@ -270,6 +305,10 @@ from the function.
 	 ((fresh (bit bs) (== r-b `(,bit . ,bs)))))
 	(sub1o c c-1)
 	(gcf a b c-1 f new-a new-b)))))))
+|#
+
+
+
 
 (defrel simplifyo (n o)
   (conde
@@ -284,10 +323,10 @@ from the function.
 				   (INTERNAL-NUMBER (,n-sgn) . ,numer)
 				   (INTERNAL-NUMBER (,d-sgn) . ,denom)))
 	   (new-sign n-sgn d-sgn sgn)
-	   (fresh (bit bs min f new-n new-m)
+	   (fresh (bit bs min new-n new-m)
 		  (== rem `(,bit . ,bs))
 		  (find-min numer denom min)
-		  (gcf numer denom min f new-n new-m)
+		  (do-simp numer denom min new-n new-m)
 		  (conde
 		   ((== new-m '(1))
 		    (== o `(INTERNAL-NUMBER (,sgn) . ,new-n)))
@@ -343,7 +382,7 @@ from the function.
       (do-timeso n-denom m-denom C)
       (do-timeso n-denom m-num cast-m)
       (do-timeso m-denom n-num cast-n)
-      (do-pluso N M NUM)
+      (do-pluso cast-m cast-n NUM)
       (simplifyo `(INTERNAL-NUMBER (RATIONAL) ,NUM ,C) o))))
 
 (defrel do-pluso (n m o)
