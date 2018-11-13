@@ -52,7 +52,7 @@
     (and nil ando) (or nil oro) (not 1 noto)
     (booleanp 1 booleanpo-fn) (symbolp 1 symbolpo-fn)
     (varp 1 varpo-fn) (consp 1 conspo-fn) (symbolp 1 symbolpo-fn)
-    (endp 1 endpo-fn)
+    (endp 1 endpo-fn) (equal 2 ==-fn)
     ;; numbers (has changed)
     (zerop 1 zeropo-fn) (numberp 1 numberpo-fn)
     (natp 1 natpo-fn) (integerp 1 integerpo-fn) (posp 1 pospo-fn)
@@ -61,7 +61,7 @@
     ;; strings and chars
     (stringp 1 stringpo-fn) (characterp 1 charpo-fn)
     (string-append 2 concato) (length 1 str-leno)
-    (subseq 2 subseqo)))
+    (subseq 3 subseqo)))
 
 (defun do-rec (form es dest)
   (let ((es (mapcar #'miniKanrenize-go es))
@@ -85,7 +85,7 @@
    ((has-form 'let* expr) (miniKanrenize-let* expr dest))
    ;; control flow
    ((has-form 'cond expr)
-    `(conde . ,(miniKanrenize-cond (cdr expr) dest)))
+    `(conde . ,(miniKanrenize-cond (cdr expr) nil dest)))
    ((has-form 'if expr) (miniKanrenize-if expr dest))
    ;; subseq – since it 
    ;; the majority of forms can be handled equivalently
@@ -97,15 +97,16 @@
 ;; miniKanrenize helpers for special cases
 
 ;; conditionals
-(defun miniKanrenize-cond (lines dest)
+(defun miniKanrenize-cond (lines negations dest)
   (cond
    ((endp lines) '(((fail))))
-   (t (let ((line1 (car lines)))
+   (t (let* ((line1 (car lines))
+	     (test (miniKanrenize-bool (car line1)))
+	     (test-neg (miniKanrenize-bool `(not ,(car line1)))))
 	(if line1
 	    (cons
-	     `(,(miniKanrenize-bool (car line1))
-	       ,(miniKanrenize (cadr line1) dest))
-	     (miniKanrenize-cond (cdr lines) dest))
+	     `(,test ,@negations ,(miniKanrenize (cadr line1) dest))
+	     (miniKanrenize-cond (cdr lines) (cons test-neg negations) dest))
 	  `(((fail))))))))
 
 (defun miniKanrenize-if (expr dest)
@@ -113,7 +114,8 @@
 	(then (caddr expr))
 	(alt (cadddr expr)))
     `(conde . ,(miniKanrenize-cond (list (list test then)
-					 (list `(not ,test) alt))
+					 (list t alt))
+				   nil
 				   dest))))
 
 ;; let statements

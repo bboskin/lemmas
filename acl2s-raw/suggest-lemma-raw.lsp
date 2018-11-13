@@ -282,14 +282,6 @@ The keywords for suggest-lemma are:
 		  (assign result (not cx?)))))
      (acl2::@ result))))
 
-(defun simplify-hyps (hyps seen)
-  (cond
-   ((endp hyps) seen)
-   (t (subsumed? (car hyps) `(and ,@(cdr hyps) ,@seen))
-      (if (@ result)
-	  (simplify-hyps (cdr hyps) seen)
-	  (simplify-hyps (cdr hyps) (cons (car hyps) seen))))))
-
 (defun remove-allp-hyps (hyps)
   (remove-if-not
    #'(lambda (e)
@@ -383,8 +375,7 @@ The keywords for suggest-lemma are:
 			     (all-lines)))
 	  ;; setting up hypotheses
 	  (contract-hyps (get-hyps start))
-	  (hyps (include-all-vars (simplify-hyps (append contract-hyps hyps)
-						 nil)
+	  (hyps (include-all-vars (append contract-hyps hyps)
 				  (free-vars start))))
      (eval `(defrel value-of (expr ρ o)
 	      (conde . ,new-e)))

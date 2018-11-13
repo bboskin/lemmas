@@ -174,6 +174,13 @@
 	       :required-expressions remdups-fast ls
 	       :with in)
 
+;; to walk through the world, look up finding all function definitions
+;; in the world
+;; use trans-eval
+
+;; get rid of simplification of hyps
+
+;; add list predicates
 
 ;; sorting
 
@@ -185,7 +192,7 @@
   (cond
    ((endp ls) t)
    ((endp (cdr ls)) t)
-   ((< (car ls) (cadr ls))
+   ((< (car ls) (car (cdr ls)))
     (orderedp (cdr ls)))
    (t nil)))
 
@@ -205,7 +212,8 @@
    (t (insert (car ls)
 	      (isort (cdr ls))))))
 
-(suggest-lemma (isort ls) :hyps (orderedp ls))
+(suggest-lemma (isort ls)
+	       :hyps (orderedp ls))
 
 (suggest-lemma ls
 	       :required-expressions (isort ls)
@@ -233,8 +241,9 @@
 
 ;; first key quicksort-isort lemma
 (suggest-lemma (isort (less x ls))
-	       :required-expressions (isort ls)
-	       :with less)
+	       :required-expressions less (isort ls)
+	       :with all-lines
+	       )
 
 (defunc2 notless (x ls)
   :input-contract (and (integerp x) (loip ls))
@@ -244,6 +253,23 @@
    ((my-lte x (car ls))
     (cons (car ls) (notless x (cdr ls))))	  
    (t (notless x (cdr ls)))))
+
+
+(IMPLIES (AND (LOIP (CDR LS))
+              (INTEGERP (CAR LS)))
+         (EQUAL (APPEND (LESS (CAR LS) (ISORT (CDR LS)))
+                        (CONS (CAR LS)
+                              (NOTLESS (CAR LS) (ISORT (CDR LS)))))
+                (INSERT (CAR LS) (ISORT (CDR LS)))))
+
+(test? (IMPLIES (AND (ORDEREDP LS) (INTEGERP A))
+	      (EQUAL (APPEND (LESS A LS)
+			     (CONS A (NOTLESS A LS)))
+		     (INSERT A LS))))
+
+
+(thm (implies (orderedp ls) (loip ls)))
+
 
 ;; second key quicksort-isort lemma
 (suggest-lemma (isort (notless x ls))

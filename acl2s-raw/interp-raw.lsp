@@ -60,7 +60,7 @@
     ;; strings
     (stringp 1 stringpo-fn) (characterp 1 charpo-fn)
     (string-append 2 concato) (length 1 str-leno)
-    (subseq 2 subseqo)))
+    (subseq 3 subseqo)))
 
 (defun new-clause (num-args vars pmatch recursive-calls final)
   (cond

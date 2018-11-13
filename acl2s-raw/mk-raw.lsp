@@ -106,6 +106,13 @@
     (let ((s (unify u v s)))
       (if s `(,s) '()))))
 
+(defun ==-fn (u v o)
+  (lambda (s)
+    (let ((new-s (unify u v s)))
+      (if new-s
+	  (apply (== o t) (list new-s))
+	(apply (== o nil) (list s))))))
+
 (defun succeed ()
   (lambda (s)
     `(,s)))
