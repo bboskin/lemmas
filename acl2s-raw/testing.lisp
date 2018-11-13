@@ -16,7 +16,7 @@
 (suggest-lemma x :hyps (natp x))
 
 (defunc2 not-test (a b)
-  :input-contract (and (natp a) (natp b))
+  :input-contract (and (integerp a) (integerp b))
   :output-contract (booleanp (not-test a b))
   (not (< a b)))
 
@@ -26,7 +26,7 @@
 
 (defunc2 if-test (a)
   :input-contract (booleanp a)
-  :output-contract (natp (if-test a))
+  :output-contract (integerp (if-test a))
   (if a 0 1))
 
 (suggest-lemma a
@@ -53,22 +53,20 @@
 
 ;; testing
 (defunc2 bar5 (a b)
-  :input-contract (and (natp a) (natp b))
+  :input-contract (and (integerp a) (integerp b))
   :output-contract (booleanp (bar5 a b))
   (if (<= a b) nil t))
 
 (suggest-lemma (bar5 a b)
-	       :required-expressions <= not
-	       :hyps (natp a) (natp b))
+	       :required-expressions <= not)
 
 (suggest-lemma (bar5 a b)
-	       :required-expressions bar5
-	       :hyps (natp a) (natp b))
+	       :required-expressions bar5)
 
 (suggest-lemma (<= a b)
 	       :required-expressions bar5
 	       :with not
-	       :hyps (natp a) (natp b))
+	       :hyps (integerp a) (integerp b))
 
 (defunc2 eta-cons (a b)
   :input-contract (true-listp b)
@@ -179,10 +177,10 @@
 
 ;; sorting
 
-(defdata lon (listof nat))
+(defdata loi (listof integer))
 
 (defunc2 orderedp (ls)
-  :input-contract (lonp ls)
+  :input-contract (loip ls)
   :output-contract (booleanp (orderedp ls))
   (cond
    ((endp ls) t)
@@ -192,16 +190,16 @@
    (t nil)))
 
 (defunc2 insert (x ls)
-  :input-contract (and (natp x) (lonp ls))
-  :output-contract (lonp (insert x ls))
+  :input-contract (and (integerp x) (loip ls))
+  :output-contract (loip (insert x ls))
   (cond
    ((equal ls nil) (cons x nil))
    ((<= x (car ls)) (cons x ls))
    (t (cons (car ls) (insert x (cdr ls))))))
 
 (defunc2 isort (ls)
-  :input-contract (lonp ls)
-  :output-contract (lonp (isort ls))
+  :input-contract (loip ls)
+  :output-contract (loip (isort ls))
   (cond
    ((endp ls) nil)
    (t (insert (car ls)
@@ -211,7 +209,7 @@
 
 (suggest-lemma ls
 	       :required-expressions (isort ls)
-	       :hyps (orderedp ls) (lonp ls))
+	       :hyps (orderedp ls) (loip ls))
 
 
 (defunc2 my-lte (a b)
@@ -222,8 +220,8 @@
 (suggest-lemma (>= a b) :required-expressions my-lte)
 
 (defunc2 less (x ls)
-  :input-contract (and (natp x) (lonp ls))
-  :output-contract (lonp (less x ls))
+  :input-contract (and (integerp x) (loip ls))
+  :output-contract (loip (less x ls))
   (cond
    ((endp ls) nil)
    ((not (my-lte x (car ls)))
@@ -239,8 +237,8 @@
 	       :with less)
 
 (defunc2 notless (x ls)
-  :input-contract (and (rationalp x) (lonp ls))
-  :output-contract (lonp (notless x ls))
+  :input-contract (and (integerp x) (loip ls))
+  :output-contract (loip (notless x ls))
   (cond
    ((endp ls) nil)
    ((my-lte x (car ls))
@@ -269,8 +267,8 @@
 	       :hyps (consp ls))
 
 (defunc2 qsort (ls)
-  :input-contract (lonp ls)
-  :output-contract (lonp (qsort ls))
+  :input-contract (loip ls)
+  :output-contract (loip (qsort ls))
   (cond
    ((endp ls) nil)
    (t (let ((pivot (car ls)))
@@ -280,20 +278,23 @@
 (suggest-lemma (qsort ls)
 	       :required-expressions qsort)
 
+(suggest-lemma (qsort ls)
+	       :required-expressions isort)
+
 ;;; testing eta-expansions of all the primitives
 
 ;; number stuff
 (defunc2 my-+ (a b)
-  :input-contract (and (rationalp a) (rationalp b))
-  :output-contract (rationalp (my-+ a b))
+  :input-contract (and (integerp a) (integerp b))
+  :output-contract (integerp (my-+ a b))
   (+ a b))
 
 (suggest-lemma (my-+ a b)
 	       :required-expressions +)
 
 (defunc2 my-- (a b)
-     :input-contract (and (rationalp a) (rationalp b))
-     :output-contract (rationalp (my-- a b))
+     :input-contract (and (integerp a) (integerp b))
+     :output-contract (integerp (my-- a b))
      (- a b))
 
 (suggest-lemma (my-- a b)
@@ -321,7 +322,8 @@
 
 (suggest-lemma (my-lt a b) :required-expressions <)
 
-(suggest-lemma (my-lte a b) :required-expressions <=)
+(suggest-lemma (my-lte a b) :required-expressions <=
+	       :hyps (integerp a) (integerp b))
 
 (defunc my-gte (a b)
   :input-contract (and (rationalp a) (rationalp b))

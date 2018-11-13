@@ -13,21 +13,14 @@
 ;; But, certain operations are slow for rationals with large num/denoms,
 ;; so (hopefully only for now) we use mod.
 
-
-(defun simplify-numbers (n)
-  n
-  #|(cond
-   ((natp n) (mod n 20))
-   ((negp n) (* -1 (mod n 20)))
-   ((rationalp n) (/ (mod (numerator n) 20)
-		     (+ 1 (mod (denominator n) 20))))
-   (t 0))|#)
-
 (defun fix-atom (e)
   (cond
    ((symbolp e) e)
-   ;; strings, chars, and complex numbers become 0
-   (t (build-num (simplify-numbers e)))))
+   ((characterp e) (build-char e))
+   ((stringp e) (build-string e))
+   ((rationalp e) (build-num e))
+   ;; complex numbers become nil
+   (t nil)))
 
 
 ;; add tags to quoted values, creating valid expressions
@@ -52,16 +45,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; forms to create valid values from test cases (for environment)
 
-(defun elim-bad-atoms-and-quote (exp)
+(defun elim-quote (exp)
   (cond
    ((symbolp exp) exp)
-   ((not (consp exp)) (simplify-numbers exp))
-   ((equal (car exp) 'quote) (elim-bad-atoms-and-quote (cadr exp)))
-   (t (cons (elim-bad-atoms-and-quote (car exp))
-	    (elim-bad-atoms-and-quote (cdr exp))))))
+   ((not (consp exp)) exp)
+   ((equal (car exp) 'quote) (elim-quote (cadr exp)))
+   (t (cons (elim-quote (car exp))
+	    (elim-quote (cdr exp))))))
 
 (defun coerce-val (pr)
-  (list (car pr) (elim-bad-atoms-and-quote (cadr pr))))
+  (list (car pr) (elim-quote (cadr pr))))
 
 (defun coerce-tests (tests)
   (mapcar #'coerce-val tests))
@@ -90,7 +83,9 @@
     (let ((tag (car v)))
       (cond
        ((equal tag 'INTERNAL-SYMBOL) (cadr v))
+       ((equal tag 'INTERNAL-CHAR) (cadr v))
        ((equal tag 'INTERNAL-NUMBER) (read-back-num v))
+       ((equal tag 'INTERNAL-STRING) (read-back-string (cdr v)))
        ((equal tag 'INTERNAL-CONS)
 	(cons (read-back (cadr v))
 	      (read-back (caddr v))))
@@ -147,6 +142,8 @@
    ((equal (car ls) 'INTERNAL-NUMBER) '(number))
    ((equal (car ls) 'INTERNAL-SYMBOL) '(symbol))
    ((equal (car ls) 'INTERNAL-CONS) '(cons))
+   ((equal (car ls) 'INTERNAL-STRING) '(string))
+   ((equal (car ls) 'INTERNAL-CHAR) '(char))
    (t (cons (car ls)
 	    (reduce #'append (mapcar #'expr-symbols (cdr ls))
 		    :initial-value nil)))))
@@ -386,7 +383,8 @@ The keywords for suggest-lemma are:
 			     (all-lines)))
 	  ;; setting up hypotheses
 	  (contract-hyps (get-hyps start))
-	  (hyps (include-all-vars (simplify-hyps (append contract-hyps hyps) nil)
+	  (hyps (include-all-vars (simplify-hyps (append contract-hyps hyps)
+						 nil)
 				  (free-vars start))))
      (eval `(defrel value-of (expr ρ o)
 	      (conde . ,new-e)))
@@ -395,7 +393,7 @@ The keywords for suggest-lemma are:
 
 (defun all-lines ()
   (append 
-   '(var boolean symbol number cons car cdr let if cond)
+   '(var boolean symbol number string char cons car cdr let if cond)
    (mapcar #'car *interp-built-ins*)))
 
 (defun all-groups () '(all-lines))

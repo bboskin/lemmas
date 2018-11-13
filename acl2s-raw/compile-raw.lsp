@@ -45,7 +45,7 @@
 
 (defparameter built-ins
   '((cons 2 conso) (car 1 caro) (cdr 1 cdro)
-    (append 2 appendo) (reverse 1 reverso)
+    (append 2 appendo) (reverse 1 reverso) (len 1 leno)
     (+ 2 do-pluso) (- 2 do-minuso) (* 2 do-timeso) (sqr 1 do-sqro)
     (< 2 do-less-than-o-fn) (<= 2 do-less-than-equal-o-fn)
     (> 2 do-greater-than-o-fn) (>= 2 do-greater-than-equal-o-fn)
@@ -55,9 +55,13 @@
     (endp 1 endpo-fn)
     ;; numbers (has changed)
     (zerop 1 zeropo-fn) (numberp 1 numberpo-fn)
-    (natp 1 natpo-fn) (intp 1 intpo-fn) (posp 1 pospo-fn)
-    (negp 1 negpo-fn) (rationalp 1 rationalp-fn)
-    (numerator 1 numeratoro) (denominator 1 denominatoro)))
+    (natp 1 natpo-fn) (integerp 1 integerpo-fn) (posp 1 pospo-fn)
+    (negp 1 negpo-fn) (rationalp 1 rationalpo-fn)
+    (numerator 1 numeratoro) (denominator 1 denominatoro)
+    ;; strings and chars
+    (stringp 1 stringpo-fn) (characterp 1 charpo-fn)
+    (concat 2 concato) (length 1 str-leno)
+    (subseq 2 subseqo)))
 
 (defun do-rec (form es dest)
   (let ((es (mapcar #'miniKanrenize-go es))
@@ -76,14 +80,14 @@
    ((numberp expr) `(== ',(build-num expr) ,dest))
    ((symbolp expr) `(== ,expr ,dest))
    ((has-form 'quote expr) `(== ',(build-sym expr) ,dest))
-   ;; Special cases: let, cond, and user-defind functions
-   ;; let
+   ;; Special cases: let, control flow
    ((has-form 'let expr) (miniKanrenize-let expr dest))
    ((has-form 'let* expr) (miniKanrenize-let* expr dest))
    ;; control flow
    ((has-form 'cond expr)
     `(conde . ,(miniKanrenize-cond (cdr expr) dest)))
    ((has-form 'if expr) (miniKanrenize-if expr dest))
+   ;; subseq – since it 
    ;; the majority of forms can be handled equivalently
    ((consp expr) (do-rec (car expr) (cdr expr) dest))
    ;; anything else fails
@@ -143,13 +147,13 @@
 (defparameter built-ins-bool
   '((equal 2 ==)
     (varp 1 varpo) (booleanp 1 booleanpo) (symbolp 1 symbolpo) (endp 1 endpo)
-    (consp 1 conspo)
+    (consp 1 conspo) (stringp 1 stringpo) (characterp 1 charpo)
     (< 2 do-less-than-o) (<= 2 do-less-than-equal-o)
     (> 2 do-greater-than-o) (>= 2 do-greater-than-equal-o)
     ;; numbers (has changed)
     (zerop 1 zeropo) (numberp 1 numberpo)
-    (natp 1 natpo) (intp 1 intpo) (posp 1 pospo)
-    (negp 1 negpo) (rationalp 1 rationalp)))
+    (natp 1 natpo) (integerp 1 integerpo) (posp 1 pospo)
+    (negp 1 negpo) (rationalp 1 rationalpo)))
 
 (defun do-rec-bool (form es)
   (let ((es (mapcar #'miniKanrenize-go es))

@@ -330,8 +330,8 @@ this form:
    ((natp n) (list* 'INTERNAL-NUMBER '(0) (build-num-in n)))
    ((integerp n) (list* 'INTERNAL-NUMBER '(1) (build-num-in (abs n))))
    ((rationalp n) (list 'INTERNAL-NUMBER '(RATIONAL)
-			 (build-num (acl2s::numerator n))
-			 (build-num (acl2s::denominator n))))))
+	     (build-num (acl2s::numerator n))
+	     (build-num (acl2s::denominator n))))))
 
 (defun read-back-num (n)
   (if (and (consp n) (equal (car n) 'INTERNAL-NUMBER))

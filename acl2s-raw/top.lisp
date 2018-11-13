@@ -26,16 +26,22 @@
 	   (xargs :stobjs state))
   (mv nil (acl2::raise "Wrong version of gen-rel-inner is being called") state))
 
+#|
 
 (acl2::define get-tests ((form true-listp))
   :returns (nil)
   (declare (ignore form))
   (acl2::raise "wrong"))
-
 (acl2::define get-final (form from to)
   :returns (nil)
   (declare (ignore form form to))
   (acl2::raise "wrong"))
+
+(acl2::define by-hand-rational-enum ((n natp))
+  :returns (nil)
+  (declare (ignore n))
+  (acl2::raise "wrong"))
+|#
 
 (acl2::include-raw "to-acl2-raw.lsp" :do-not-compile t)
 (acl2::include-raw "helpers-raw.lsp" :do-not-compile t)
@@ -67,3 +73,10 @@
 
 (defmacro add-to-group (name &rest args)
   `(add-to-group-inner ',name ',args))
+
+
+
+;;;; Setting bounds on rational numbers
+
+;(defdata-attach rational :enumerator by-hand-rational-enum)
+

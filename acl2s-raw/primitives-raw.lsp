@@ -35,7 +35,9 @@ from the function.
    ((booleanpo e) (== o t))
    ((conspo e) (== o nil))
    ((numberpo e) (== o nil))
-   ((varpo e) (== o nil))))
+   ((varpo e) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
 
 (defrel varpo (e)
   (fresh (v)
@@ -46,23 +48,27 @@ from the function.
    ((varpo e) (== o t))
    ((booleanpo e) (== o nil))
    ((conspo e) (== o nil))
-   ((numberpo e) (== o nil))))
+   ((numberpo e) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
 
-(defun build-sym (s)
-  (if (symbolp s)
-      `(INTERNAL-SYMBOL ,s)
+(defun build-sym (sy)
+  (if (symbolp sy)
+      `(INTERNAL-SYMBOL ,sy)
     (error "Not a symbol: ~a" s)))
 
-(defrel symbolpo (s)
+(defrel symbolpo (sy)
   (conde
-   ((varpo s))
-   ((booleanpo s))))
+   ((varpo sy))
+   ((booleanpo sy))))
 
-(defrel symbolpo-fn (s o)
+(defrel symbolpo-fn (sy o)
   (conde
-   ((symbolpo s) (== o t))
-   ((numberpo s) (== o nil))
-   ((conspo s) (== o nil))))
+   ((symbolpo sy) (== o t))
+   ((numberpo sy) (== o nil))
+   ((conspo sy) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo sy) (== o nil))))
 
 ;; a useful relation
 (defrel non-nilo (e)
@@ -70,7 +76,9 @@ from the function.
    ((== e t))
    ((varpo e))
    ((numberpo e))
-   ((conspo e))))
+   ((conspo e))
+   ((stringpo e))
+   ((charpo e))))
 
 ;; List primitives: cons, car, cdr, endp, consp
 (defrel conso (a d o) (== o `(INTERNAL-CONS ,a ,d)))
@@ -89,7 +97,9 @@ from the function.
    ((conspo e) (== o t))
    ((numberpo e) (== o nil))
    ((varpo e) (== o nil))
-   ((booleanpo e) (== o nil))))
+   ((booleanpo e) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
 
 
 ;; Other built-in list functions: append, reverse
@@ -101,15 +111,23 @@ from the function.
 	   (conso a res o)
 	   (appendo d l2 res)))))
 
-(defrel reverso (l o)
+(defrel ls-reverso (l o)
   (conde
    ((== l '()) (== o '()))
    ((fresh (a d a-l res)
 	   (conso a d l)
 	   (conso a nil a-l)
-	   (reverso d res)
-	   (appendo res a-l o)
-	   ))))
+	   (ls-reverso d res)
+	   (appendo res a-l o)))))
+
+(defrel leno (l n)
+  (conde
+   ((== l nil) (== n '(INTERNAL-NUMBER (0))))
+   ((fresh (a d r)
+	   (conso a d l)
+	   (leno d r)
+	   (do-pluso '(INTERNAL-NUMBER (0) 1) r n)))))
+
 
 ;; boolean functions that return values
 (defrel ando (e1 e2 o)
@@ -147,7 +165,9 @@ from the function.
    ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
    ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))))
+   ((booleanpo n) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
 
 (defrel natpo (n)
   (fresh (e)
@@ -160,7 +180,9 @@ from the function.
    ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
    ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))))
+   ((booleanpo n) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
 
 
 (defrel pospo (n)
@@ -176,44 +198,50 @@ from the function.
    ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
    ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))))
+   ((booleanpo n) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
 
 (defrel negpo (n)
   (fresh (e)
     (fresh (a d) (== e `(,a . ,d)))
     (== n `(INTERNAL-NUMBER (1) . ,e))))
 
-(defrel nego-fn (n o)
+(defrel negpo-fn (n o)
   (conde
    ((natpo n) (== o nil))
    ((negpo n) (== o t))
    ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
    ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))))
+   ((booleanpo n) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
 
-(defrel intpo (n)
+(defrel integerpo (n)
   (conde
    ((natpo n))
    ((negpo n))))
 
-(defrel nego-fn (n o)
+(defrel integerpo-fn (n o)
   (conde
-   ((intpo n) (== o t))
+   ((integerpo n) (== o t))
    ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
    ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))))
+   ((booleanpo n) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
 
 (defrel rationalp-exclu (n)
   (fresh (numer denom)
     (== n `(INTERNAL-NUMBER (RATIONAL) ,numer ,denom))
-    (intpo numer)
-    (intpo denom)))
+    (integerpo numer)
+    (integerpo denom)))
 
 (defrel rationalpo (n)
   (conde
-   ((intpo n))
+   ((integerpo n))
    ((rationalp-exclu n))))
 
 (defrel rationalpo-fn (n o)
@@ -221,7 +249,9 @@ from the function.
    ((rationalpo n) (== o t))
    ((conspo n) (== o nil))
    ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))))
+   ((booleanpo n) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
 
 
 ;; numbers are just rationals, here
@@ -312,7 +342,7 @@ from the function.
 
 (defrel simplifyo (n o)
   (conde
-   ((intpo n) (== n o))
+   ((integerpo n) (== n o))
    ((fresh (sgn d)
 	   (== n `(INTERNAL-NUMBER (RATIONAL)
 				   (INTERNAL-NUMBER (,sgn))
@@ -344,7 +374,7 @@ from the function.
 (defrel coerce-to-rational (n o)
   (conde
    ((rationalp-exclu n) (== n o))
-   ((intpo n) (== o `(INTERNAL-NUMBER (RATIONAL) ,n
+   ((integerpo n) (== o `(INTERNAL-NUMBER (RATIONAL) ,n
 				     (INTERNAL-NUMBER (0) 1))))))
 
 (defrel negate (n n-)
@@ -361,13 +391,13 @@ from the function.
 
 (defrel numeratoro (n o)
   (conde
-   ((intpo n) (== o n))
+   ((integerpo n) (== o n))
    ((fresh (denom)
 	   (== n `(INTERNAL-NUMBER (RATIONAL) ,o ,denom))))))
 
 (defrel denominatoro (n o)
   (conde
-   ((intpo n) (== o '(INTERNAL-NUMBER (0))))
+   ((integerpo n) (== o '(INTERNAL-NUMBER (0) 1)))
    ((fresh (numer) (== n `(INTERNAL-NUMBER (RATIONAL) ,numer ,o))))))
 
 ;; The arithmetic operations: zerop, numberp, +, -, *, /, sqr
@@ -501,5 +531,138 @@ from the function.
   (conde
    ((do-less-than-equal-o m n) (== o 't))
    ((do-less-than-o n m) (== o 'nil))))
+
+
+;;;;;;;;;;;;;;;;;;
+;; String library (and characters)
+
+(defun build-string-inner (str)
+  (cond
+   ((equal str "") '())
+   (t (cons (char str 0)
+	    (build-string-inner (subseq str 1))))))
+
+(defun build-string (str)
+  `(INTERNAL-STRING . ,(build-string-inner str)))
+
+(defun read-back-string (str)
+  (cond
+   ((equal str '()) "")
+   (t (concatenate 'string
+		   (make-string 1 :initial-element (car str))
+		   (read-back-string (cdr str))))))
+
+
+(defun build-char (c)
+  `(INTERNAL-CHAR ,c))
+
+;; relations
+(defrel stringpo (str)
+  (fresh (s^)
+	 (== str `(INTERNAL-STRING . ,s^))))
+
+(defrel stringpo-fn (str o)
+  (conde
+   ((stringpo str) (== o t))
+   ((charpo str) (== o nil))
+   ((numberpo str) (== o nil))
+   ((symbolpo str) (== o nil))
+   ((booleanpo str) (== o nil))
+   ((conspo str) (== o nil))))
+
+(defrel charpo (c)
+  (fresh (c^)
+	 (== c `(INTERNAL-CHAR ,c^))))
+
+(defrel charpo-fn (c o)
+  (conde
+   ((stringpo c) (== o nil))
+   ((charpo c) (== o t))
+   ((numberpo c) (== o nil))
+   ((symbolpo c) (== o nil))
+   ((booleanpo c) (== o nil))
+   ((conspo c) (== o nil))))
+
+;; concatenate
+(defrel concato (s1 s2 o)
+  (fresh (a b c)
+    (== s1 `(INTERNAL-STRING . ,a))
+    (== s2 `(INTERNAL-STRING . ,b))
+    (== o `(INTERNAL-STRING . ,c))
+    (concato-inner a b c)))
+
+(defrel concato-inner (s1 s2 o)
+  (conde
+   ((== s1 '()) (== s2 o))
+   ((fresh (c1 d r)
+      (== s1 `(,c1 . ,d))
+      (== o `(,c1 . ,r))
+      (concato-inner d s2 r)))))
+
+;; length
+(defrel str-leno (st n)
+  (fresh (str num)
+    (== st `(INTERNAL-STRING . ,str))
+    (== n `(INTERNAL-NUMBER (0)  . ,num))
+    (str-leno-inner str num)))
+
+(defrel str-leno-inner (str num)
+  (conde
+   ((== str '()) (== num '()))
+   ((fresh (c1 d r)
+      (== str `(,c1 . ,d))
+      (str-leno-inner d r)
+      (pluso '(1) r num)))))
+
+;; reverse
+
+(defrel str-revo (st r)
+  (fresh (str rev)
+    (== st `(INTERNAL-STRING . ,str))
+    (== r `(INTERNAL-STRING . ,rev))
+    (str-revo-inner str '()  rev)))
+
+(defrel str-revo-inner (st a r)
+  (conde
+   ((== st '()) (== a r))
+   ((fresh (c d)
+	   (== st `(,c . ,d))
+	   (str-revo-inner d `(,c . ,a) r)))))
+
+;; subseq
+
+(defrel subseqo (str start end o)
+  (fresh (a n m r)
+    (== str `(INTERNAL-STRING . ,a))
+    (== start `(INTERNAL-NUMBER (0) . ,n))
+    (== end `(INTERNAL-NUMBER (0) . ,m))
+    (== o `(INTERNAL-STRING . ,r))
+    (<o n m)
+    (subseqo-inner a n m '() r)))
+
+;; variant with 1 argument
+(defrel subseqo1 (str start o)
+  (fresh (n)
+    (str-leno str n)
+    (subseqo str start n o)))
+
+(defrel subseqo-inner (str start end i o)
+  (conde
+   ((== str '()) (== o '()))
+   ((fresh (a d i+1)
+      (== str `(,a . ,d))
+      (pluso '(1) i i+1)
+      (conde
+       ((== end i) (== o '()))
+       ((<o i end)
+	(conde
+	 ((<o i start) (subseqo-inner d start end i+1 o))
+	 ((<=o start i)
+	  (fresh (r)
+	    (== o `(,a . ,r))
+	    (subseqo-inner d start end i+1 r))))))))))
+
+
+
 
 

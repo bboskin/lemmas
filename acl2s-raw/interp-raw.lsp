@@ -37,19 +37,30 @@
 	    ((== b nil) (do-cond rst ρ o))
 	    ((non-nilo b) (value-of c ρ o)))))))
 
+
+;; the wrapper function accepting either lists or strings, as in ACL2S
+(defrel reverso (x o)
+  (conde
+   ((ls-reverso x o))
+   ((str-revo x o))))
+
 (defparameter *interp-built-ins*
   '((+ 2 do-pluso) (- 2 do-minuso) (* 2 do-timeso) (sqr 1 do-sqro)
     (< 2 do-less-than-o-fn) (<= 2 do-less-than-equal-o-fn)
     (> 2 do-greater-than-o-fn) (>= 2 do-greater-than-equal-o-fn)
-    (append 2 appendo) (reverse 1 reverso)
+    (append 2 appendo) (reverse 1 reverso) (len 1 leno)
     (and 2 ando) (or 2 oro) (not 1 noto)
     (booleanp 1 booleanpo-fn) (symbolp 1 symbolpo-fn)
     (varp 1 varpo-fn) (consp 1 conspo-fn) (endp 1 endpo-fn) 
     ;; new numbers
-    (zerop 1 zeropo-fn) (numberp 1 numberpo-fn)
-    (natp 1 natpo-fn) (negp 1 negpo-fn) (intp 1 intpo-fn)
-    (rationalp 1 rationalp-fn) (numerator 1 numeratoro)
-    (denominator 1 denominatoro)))
+    (zerop 1 zeropo-fn) (numberp 1 numberpo-fn) (posp 1 pospo-fn)
+    (natp 1 natpo-fn) (negp 1 negpo-fn) (integerp 1 integerpo-fn)
+    (rationalp 1 rationalpo-fn) (numerator 1 numeratoro)
+    (denominator 1 denominatoro)
+    ;; strings
+    (stringp 1 stringpo-fn) (characterp 1 charpo-fn)
+    (string-append 2 concato) (length 1 str-leno)
+    (subseq 2 subseqo)))
 
 (defun new-clause (num-args vars pmatch recursive-calls final)
   (cond
@@ -82,6 +93,8 @@
     ((booleanpo expr) (== o expr))
     ((varpo expr) (== o expr))
     ((numberpo expr) (== o expr))
+    ((stringpo expr) (== o expr))
+    ((charpo expr) (== o expr))
     ;; cons, car, cdr are hard-coded since they are non-recursive, meaning
     ;; that doing the helper function first is better
     ((fresh (a d res1 res2)
@@ -110,7 +123,7 @@
 
 (defun all-lines ()
   (append 
-   '(var boolean symbol number cons car cdr let if cond)
+   '(var boolean symbol number string char cons car cdr let if cond)
    (mapcar #'car *interp-built-ins*)))
 
 (defun make-init-has-arity-clause (pr)
@@ -125,6 +138,12 @@
     ((== form 'cdr) (== n 1))
     ((== form 'if) (== n 3))
     ((== form 'let) (== n 2))
+    ((== form 'varp) (== n 1))
+    ((== form 'conspp) (== n 1))
+    ((== form 'booleanp) (== n 1))
+    ((== form 'symbolp) (== n 1))
+    ((== form 'stringp) (== n 1))
+    ((== form 'charp) (== n 1))
     ((== form 'cond))
     ,@(mapcar #'make-init-has-arity-clause *interp-built-ins*)
     ((succeed))))
@@ -174,37 +193,6 @@
 	    ((contains-form form e3))
 	    ((contains-form form e4)))))))
 
-#|
-(defrel contains-form (form e)
-  (conde
-   ((== form e))
-   ((fresh (op e1)
-	   (== e `(,op ,e1))
-	   (conde
-	    ( (== op form))
-	    ((contains-form form e1)))))
-   ((fresh (op e1 e2)
-	   (== e `(,op ,e1 ,e2))
-	   (conde
-	    ( (== op form)) 
-	    ((contains-form form e1))
-	    ((contains-form form e2)))))
-   ((fresh (op e1 e2 e3)
-	   (== e `(,op ,e1 ,e2 ,e3))
-	   (conde
-	    ( (== op form))
-	    ((contains-form form e1))
-	    ((contains-form form e2))
-	    ((contains-form form e3)))))
-   ((fresh (op e1 e2 e3 e4)
-	   (== e `(,op ,e1 ,e2 ,e3 ,4))
-	   (conde
-	    ( (== op form))
-	    ((contains-form form e1))
-	    ((contains-form form e2))
-	    ((contains-form form e3))
-	    ((contains-form form e4)))))))|#
-
 (defrel contains-forms (fms e)
   (conde
    ((== '() fms))
@@ -221,15 +209,6 @@
 	      (== results `(,r1 . ,rs))
 	      (value-of e2 a r1)
 	      (passes-tests e2 d rs)))))
-
-#|
-(defrel find-equivalent (forms e tests results)
-  (passes-tests e tests results)
-  (contains-forms forms e))
-(defrel find-equivalent (forms e tests results)
-  (contains-forms forms e)
-  (passes-tests e tests results))
-|#
 
 (defrel find-equivalent (forms e tests results)
   (conde

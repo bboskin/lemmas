@@ -1,9 +1,6 @@
 ;;;; NUMBERS
 
--- implement integers and rationals DONE
-
--- make rational simplification faster
-   (write alternative to /o since only remainder is needed, for the most part)
+-- figure out why rational stuff is still slow
 
 ;;; STRINGS
 
