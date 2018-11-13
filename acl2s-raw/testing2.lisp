@@ -29,6 +29,14 @@
 	       :required-expressions (append l1 l2)
 	       :with map-len)
 
+;; also some rational stuff
+(defunc2 d-eta (n)
+  :input-contract (rationalp n)
+  :output-contract (integerp (d-eta n))
+  (denominator n))
+
+(suggest-lemma (d-eta n) :with denominator)
+
 ;; testing recognizers
 
 (suggest-lemma (consp e) :with consp)
@@ -68,22 +76,7 @@
    (t 0)))
 
 
-(defgroup conv-forms
-  number
-  length
-  numerator denominator +
-  car cdr)
-
-(defunc2 d-eta (n)
-  :input-contract (rationalp n)
-  :output-contract (integerp (d-eta n))
-  (denominator n))
-
-(suggest-lemma (d-eta n)
-	       :with conv-forms)
-
-(suggest-lemma (numerator e)
-	       :with conv-forms)
+(defgroup conv-forms number length numerator denominator + car cdr)
 
 (suggest-lemma (convert-to-number e)
 	       :required-expressions (numerator e)
@@ -101,3 +94,29 @@
 (suggest-lemma (convert-to-number e)
 	       :with conv-forms
 	       :hyps (characterp e))
+
+(suggest-lemma (convert-to-number e)
+	       :with conv-forms
+	       :hyps (integerp e))
+
+(suggest-lemma (convert-to-number e)
+	       :required-expressions
+	         (convert-to-number (car e))
+	         (convert-to-number (cdr e))
+	       :with conv-forms 
+	       :hyps (consp e))
+
+(suggest-lemma (convert-to-number e)
+	       :required-expressions (convert-to-number (car e)) (cdr e)
+	       :with conv-forms 
+	       :hyps (consp e))
+
+
+(defunc2 str-rev-app (s1 s2)
+  :input-contract (and (stringp s1) (stringp s2))
+  :output-contract (stringp (str-rev-app s1 s2))
+  (reverse (string-append s1 s2)))
+
+(suggest-lemma (str-rev-app s1 s2)
+	       :required-expressions (reverse s1)
+	       :with reverse string-append)

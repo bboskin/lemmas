@@ -60,7 +60,7 @@
     (numerator 1 numeratoro) (denominator 1 denominatoro)
     ;; strings and chars
     (stringp 1 stringpo-fn) (characterp 1 charpo-fn)
-    (concat 2 concato) (length 1 str-leno)
+    (string-append 2 concato) (length 1 str-leno)
     (subseq 2 subseqo)))
 
 (defun do-rec (form es dest)
