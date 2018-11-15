@@ -1,0 +1,107 @@
+
+
+(defun all-types ()
+    '((nat natpo)
+      (integer integerpo)
+      (rational rationalpo)
+      (number numberpo)
+      (symbol symbolpo)
+      (var varpo)
+      (string stringpo)
+      (character charpo)
+      (cons conspo)
+      (list listpo)
+      (true-list true-listpo)))
+
+(defun defdata-make-val (exp)
+  (cond
+   ((booleanp exp) exp)
+   ((symbolp exp) (build-sym exp))
+   ((characterp exp) (build-char exp))
+   ((stringp exp) (build-string exp))
+   ((rationalp exp) (build-num exp))
+   ((consp exp)
+    (list 'INTERNAL-CONS (defdata-make-val (car exp))
+	  (defdata-make-val (cdr exp))))))
+
+(defun desugar-list (es)
+  (cond
+   ((endp es) nil)
+   (t `(cons ,(car es)
+	     ,(desugar-list (cdr es))))))
+
+(defun desugar-list* (es)
+  (cond
+   ((endp es) nil)
+   ((endp (cdr es)) (car es))
+   (t `(cons ,(car es)
+	     ,(desugar-list* (cdr es))))))
+
+(defun compile-defdata (expr input self self-rel)
+  (cond
+   ;; constants
+   ((booleanp expr) `(== ,expr ,input))
+   ((numberp expr) `(== ,(build-num expr) ,input))
+   ((characterp expr) `(== ,(build-char expr) ,input))
+   ((stringp expr) `(== ,(build-string expr) ,input))
+   ;; recursion
+   ((equal expr self) `(,self-rel ,input))
+   ;; some other built-in type (self-rel will be added to this list upon success)
+   ((symbolp expr)
+    (let ((p (assoc expr (all-types))))
+      (if p `(,(cadr p) ,input)
+	(error "Unknown symbol ~s" p))))
+   ((consp expr)
+    (cond
+     ;; constants under quote
+     ((equal (car expr) 'quote)
+      (defdata-make-val (cadr expr)))
+     ;; oneof -> disjunction
+     ((equal (car expr) 'oneof)
+      `(disj ,(mapcar #'(lambda (e)
+			  (compile-defdata e input self self-rel))
+		      (cdr expr))))
+     ((equal (car expr) 'cons)
+      (let ((e1 (next-var))
+	    (e2 (next-var)))
+	`(fresh (,e1 ,e2)
+		(conso ,e1 ,e2 input)
+		,(compile-defdata (cadr expr) e1 self self-rel)
+		,(compile-defdata (caddr expr) e2 self self-rel))))
+     ;; listof, list, and list* can all just be desugared
+     ((equal (car expr) 'listof)
+      (let ((elem-type (cadr expr)))
+	`(disj2 (== ,input nil)
+		,(compile-defdata `(cons ,elem-type ,self) input self self-rel))))
+     ((equal (car expr) 'list)
+      (compile-defdata (desugar-list (cdr expr)) input self self-rel))
+     ((equal (car expr) 'list*)
+      (compile-defdata (desugar-list* (cdr expr)) input self self-rel))))
+   (t (error "Invalid datatype ~s" expr))))
+
+(defun defdata2 (name expr)
+  (let* ((input (next-var))
+	 (rel-name (get-rel-name name))
+	 (expr (compile-defdata expr input name rel-name))
+	 (rel-name (get-rel-fn-name name)))
+    `(defrel ,rel-name (,input) ,expr)))
+
+
+;;;
+
+(defdata2 'foo '(listof nat))
+
+(DEFREL FOO-REL (|fresh-var6|)
+  (DISJ2 (== |fresh-var6| NIL)
+	 (FRESH (|fresh-var7| |fresh-var8|)
+		(CONSO |fresh-var7| |fresh-var8| INPUT)
+		(NATPO |fresh-var7|)
+		(FOO-REL |fresh-var8|))))
+
+
+(defdata2 'bar '(oneof 0 1/2 (listof character)))
+
+
+(DEFREL BAR-REL (|fresh-var9|)
+  (DISJ2 (== (INTERNAL-NUMBER (0)) |fresh-var9|)
+	 (== (INTERNAL-NUMBER (RATIONAL) (INTERNAL-NUMBER (0) 1) (INTERNAL-NUMBER (0) 0 1)) |fresh-var9|)))

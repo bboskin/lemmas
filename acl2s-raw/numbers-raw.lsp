@@ -94,7 +94,6 @@ this form:
          (full-addero d a b c e)
          (addero e x y z)))
 
-
 (defrel pluso (n m k)
   (addero 0 n m k))
 
@@ -312,17 +311,6 @@ this form:
 
 
 ;;; User forms
-
-#|
-;; old version when only nats were supported
-(defun build-num (n)
-  (cons 'INTERNAL-NUMBER (build-num-in n)))
-
-(defun read-back-num (n)
-  (if (and (consp n) (equal (car n) 'INTERNAL-NUMBER))
-      (read-back-inner (cdr n))
-    n))
-|#
 
 ;; new versions
 (defun build-num (n)

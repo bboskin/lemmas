@@ -1,5 +1,100 @@
 (in-package "ACL2S")
 
+
+;(load "interp-raw.lsp")
+;(load "to-acl2-raw.lsp")
+
+;(load "itest-cgen.lisp")
+;(load "itest-ithm.lisp")
+;;;;;;;;;;;;;;;;;;;;;;
+;; Forms to create valid expressions
+
+;; We now have support for rational numbers!
+;; But, certain operations are slow for rationals with large num/denoms,
+;; so (hopefully only for now) we use mod.
+
+(defun fix-atom (e)
+  (cond
+   ((symbolp e) e)
+   ((characterp e) (build-char e))
+   ((stringp e) (build-string e))
+   ((rationalp e) (build-num e))
+   ;; complex numbers become nil
+   (t nil)))
+
+
+;; add tags to quoted values, creating valid expressions
+(defun fix-values (e)
+  (cond
+   ((consp e)
+    `(cons ,(fix-values (car e))
+	   ,(fix-values (cdr e))))
+   ((booleanp e) e)
+   ((symbolp e) (build-sym e))
+   (t (fix-atom e))))
+
+;; take input expressions, find quoted terms (and numbers), and fix.
+;; uses values->expressions under quote, and otherwise only changes numbers
+(defun clean-expr (e)
+  (cond
+   ((not (consp e)) (fix-atom e))
+   ((equal (car e) 'quote) (fix-values (cadr e)))
+   (t (cons (clean-expr (car e))
+	    (clean-expr (cdr e))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; forms to create valid values from test cases (for environment)
+
+(defun elim-quote (exp)
+  (cond
+   ((symbolp exp) exp)
+   ((not (consp exp)) exp)
+   ((equal (car exp) 'quote) (elim-quote (cadr exp)))
+   (t (cons (elim-quote (car exp))
+	    (elim-quote (cdr exp))))))
+
+(defun coerce-val (pr)
+  (list (car pr) (elim-quote (cadr pr))))
+
+(defun coerce-tests (tests)
+  (mapcar #'coerce-val tests))
+
+(defun clean-val (exp)
+  (cond
+   ((booleanp exp) exp)
+   ((symbolp exp) (build-sym exp))
+   ((not (consp exp)) (fix-atom exp))
+   ((equal (car exp) 'quote) (clean-val (cadr exp)))
+   ((consp exp)
+    (list 'INTERNAL-CONS (clean-val (car exp))
+	  (clean-val (cdr exp))))))
+
+(defun clean-pr (pr)
+  (list (car pr) (clean-val (cadr pr))))
+
+(defun clean-tests (alist) (mapcar #'clean-pr alist))
+
+;;; Takes synthesized expressions, and removes evidence
+;; of internal values
+(defun read-back (v)
+  (cond
+   ((symbolp v) v)
+   ((consp v)
+    (let ((tag (car v)))
+      (cond
+       ((equal tag 'INTERNAL-SYMBOL) (cadr v))
+       ((equal tag 'INTERNAL-VARSYMBOL) (cadr v))
+       ((equal tag 'INTERNAL-CHAR) (cadr v))
+       ((equal tag 'INTERNAL-NUMBER) (read-back-num v))
+       ((equal tag 'INTERNAL-STRING) (read-back-string (cdr v)))
+       ((equal tag 'INTERNAL-CONS)
+	(cons (read-back (cadr v))
+	      (read-back (caddr v))))
+       (t (cons (read-back tag)
+		(read-back (cdr v)))))))))
+
+;; suggest-lemma
+
 (defun subs (x v e)
   (cond
    ((equal e x) `',v)

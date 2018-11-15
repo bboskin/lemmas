@@ -37,30 +37,11 @@
 	    ((== b nil) (do-cond rst ρ o))
 	    ((non-nilo b) (value-of c ρ o)))))))
 
-
 ;; the wrapper function accepting either lists or strings, as in ACL2S
 (defrel reverso (x o)
   (conde
    ((ls-reverso x o))
    ((str-revo x o))))
-
-(defparameter *interp-built-ins*
-  '((+ 2 do-pluso) (- 2 do-minuso) (* 2 do-timeso) (sqr 1 do-sqro)
-    (< 2 do-less-than-o-fn) (<= 2 do-less-than-equal-o-fn)
-    (> 2 do-greater-than-o-fn) (>= 2 do-greater-than-equal-o-fn)
-    (append 2 appendo) (reverse 1 reverso) (len 1 leno)
-    (and 2 ando) (or 2 oro) (not 1 noto)
-    (booleanp 1 booleanpo-fn) (symbolp 1 symbolpo-fn)
-    (varp 1 varpo-fn) (consp 1 conspo-fn) (endp 1 endpo-fn) 
-    ;; new numbers
-    (zerop 1 zeropo-fn) (numberp 1 numberpo-fn) (posp 1 pospo-fn)
-    (natp 1 natpo-fn) (negp 1 negpo-fn) (integerp 1 integerpo-fn)
-    (rationalp 1 rationalpo-fn) (numerator 1 numeratoro)
-    (denominator 1 denominatoro)
-    ;; strings
-    (stringp 1 stringpo-fn) (characterp 1 charpo-fn)
-    (string-append 2 concato) (length 1 str-leno)
-    (subseq 3 subseqo)))
 
 (defun new-clause (num-args vars pmatch recursive-calls final)
   (cond
@@ -80,9 +61,9 @@
 	   (- num-args 1) new-vars new-pmatch new-rec-calls new-final))))))
 
 (defun make-init-value-of-clause (e)
-  (let ((name (car e))
-	(arity (cadr e))
-	(rel-name (caddr e)))
+  (let* ((name (car e))
+	 (arity (if (cadr e) (cadr e) 2))
+	 (rel-name (if (cadr e) (caddr e) (car (cdddr e)))))
     (new-clause arity nil `(list ',name) nil (list rel-name))))
 
 (defun expr-for-value-of ()
@@ -102,8 +83,10 @@
 	    (conso res1 res2 o)
 	    (value-of a ρ res1)
 	    (value-of d ρ res2)))
-    ((fresh (pr res) (== expr `(car ,pr)) (caro res o) (value-of pr ρ res)))
-    ((fresh (pr res) (== expr `(cdr ,pr)) (cdro res o) (value-of pr ρ res)))
+    ((fresh (pr res) (== expr `(car ,pr))
+	    (caro res o) (value-of pr ρ res)))
+    ((fresh (pr res) (== expr `(cdr ,pr))
+	    (cdro res o) (value-of pr ρ res)))
     ;; More complex build-ins (let, if, cond)
     ((fresh (es b new-ρ)
 	    (== expr `(let ,es ,b))
@@ -119,12 +102,12 @@
 	    (== expr `(cond . ,es))
 	    (do-cond es ρ o)))
     ;; everything else -- standard recursion & completion
-    . ,(mapcar #'make-init-value-of-clause *interp-built-ins*)))
+    . ,(mapcar #'make-init-value-of-clause built-ins)))
 
 (defun all-lines ()
   (append 
    '(var boolean symbol number string char cons car cdr let if cond)
-   (mapcar #'car *interp-built-ins*)))
+   (mapcar #'car built-ins)))
 
 (defun make-init-has-arity-clause (pr)
   (let ((name (car pr))
@@ -145,7 +128,7 @@
     ((== form 'stringp) (== n 1))
     ((== form 'charp) (== n 1))
     ((== form 'cond))
-    ,@(mapcar #'make-init-has-arity-clause *interp-built-ins*)
+    ,@(mapcar #'make-init-has-arity-clause built-ins)
     ((succeed))))
 
 (defmacro reset-interp ()
@@ -158,8 +141,6 @@
        ',(all-lines))))
 
 (reset-interp)
-
-;;;;;;;;;;
 
 ;; Constraints on expressions
 

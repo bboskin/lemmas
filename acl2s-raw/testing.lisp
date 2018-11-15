@@ -24,6 +24,10 @@
 	       :required-expressions not
 	       :with <)
 
+
+(suggest-lemma (>= a b)
+	       :required-expressions not-test)
+
 (defunc2 if-test (a)
   :input-contract (booleanp a)
   :output-contract (integerp (if-test a))
@@ -178,8 +182,6 @@
 ;; in the world
 ;; use trans-eval
 
-;; get rid of simplification of hyps
-
 ;; add list predicates
 
 ;; sorting
@@ -221,11 +223,12 @@
 
 
 (defunc2 my-lte (a b)
-  :input-contract (and (rationalp a) (rationalp b))
+  :input-contract (and (integerp a) (integerp b))
   :output-contract (booleanp (my-lte a b))
   (<= a b))
 
-(suggest-lemma (>= a b) :required-expressions my-lte)
+(suggest-lemma (>= a b) :required-expressions my-lte
+	       :hyps (integerp a) (integerp b))
 
 (defunc2 less (x ls)
   :input-contract (and (integerp x) (loip ls))
@@ -238,12 +241,10 @@
 
 (suggest-lemma (less x ls) :with less)
 
-
 ;; first key quicksort-isort lemma
 (suggest-lemma (isort (less x ls))
-	       :required-expressions less (isort ls)
-	       :with all-lines
-	       )
+	       :required-expressions (isort ls)
+	       :with less)
 
 (defunc2 notless (x ls)
   :input-contract (and (integerp x) (loip ls))
@@ -253,22 +254,6 @@
    ((my-lte x (car ls))
     (cons (car ls) (notless x (cdr ls))))	  
    (t (notless x (cdr ls)))))
-
-
-(IMPLIES (AND (LOIP (CDR LS))
-              (INTEGERP (CAR LS)))
-         (EQUAL (APPEND (LESS (CAR LS) (ISORT (CDR LS)))
-                        (CONS (CAR LS)
-                              (NOTLESS (CAR LS) (ISORT (CDR LS)))))
-                (INSERT (CAR LS) (ISORT (CDR LS)))))
-
-(test? (IMPLIES (AND (ORDEREDP LS) (INTEGERP A))
-	      (EQUAL (APPEND (LESS A LS)
-			     (CONS A (NOTLESS A LS)))
-		     (INSERT A LS))))
-
-
-(thm (implies (orderedp ls) (loip ls)))
 
 
 ;; second key quicksort-isort lemma

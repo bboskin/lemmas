@@ -15,51 +15,54 @@
        (symbolp (cadr e))))
 
 ;; Substitutions
-(defun empty-subst ()
-  (hons-acons 'SUBST nil nil))
+(defun substp (s)
+  (cond
+   ((equal s '(SUBST))
+    (and (consp (car s))
+	 (lvarp (caar s))
+	 (substp (cdr s))))))
 
 (defun empty? (s)
-  (equal s (empty-subst)))
+  (equal s '(SUBST)))
 
 (defun lookup (e s)
-  (with-fast-alist s (hons-get e s)))
+  (cond
+   ((empty? s) nil)
+   ((equal e (caar s)) (car s))
+   (t (lookup e (cdr s)))))
 
 (defun walk (v s)
-  (with-fast-alist s
-    (let ((a (and (lvarp v) (lookup v s))))
-      (cond
-       ((consp a) (walk (cdr a) s))
-       (t v)))))
+  (let ((a (and (lvarp v) (lookup v s))))
+    (cond
+     ((consp a) (walk (cadr a) s))
+     (t v))))
 
 (defun ext-s (x v s)
-  (with-fast-alist s
-    (hons-acons x v s)))
+  (cons `(,x ,v) s))
 
 
 (defun unify (u v s)
-  (with-fast-alist s
-		   (let ((u (walk u s))
-			 (v (walk v s)))
-		     (cond
-		      ((equal u v) s)
-		      ((lvarp u) (ext-s u v s))
-		      ((lvarp v) (ext-s v u s))
-		      ((and (consp u) (consp v))
-		       (let ((s (unify (car u) (car v) s)))
-			 (and s
-			      (unify (cdr u) (cdr v) s))))
-		      (t nil)))))
+  (let ((u (walk u s))
+	(v (walk v s)))
+    (cond
+     ((equal u v) s)
+     ((lvarp u) (ext-s u v s))
+     ((lvarp v) (ext-s v u s))
+     ((and (consp u) (consp v))
+      (let ((s (unify (car u) (car v) s)))
+	(and s
+	     (unify (cdr u) (cdr v) s))))
+     (t nil))))
 
 (defun walk* (v s)
-  (with-fast-alist s
-		   (let ((v (walk v s)))
-		     (cond
-		      ((lvarp v) v)
-		      ((consp v)
-		       (cons
-			(walk* (car v) s)
-			(walk* (cdr v) s)))
-		      (t v)))))
+  (let ((v (walk v s)))
+    (cond
+     ((lvarp v) v)
+     ((consp v)
+      (cons
+       (walk* (car v) s)
+       (walk* (cdr v) s)))
+     (t v))))
 
 (defun get-name (n)
   (cond
@@ -84,9 +87,9 @@
   (let ((v (walk v r)))
     (cond
      ((lvarp v)
-      (let ((n (fast-alist-len r)))
+      (let ((n (length r)))
 	(let ((rn (reify-sym (- n 1))))
-	  (ext-s v rn r))))
+	  (cons `(,v ,rn) r))))
      ((consp v)
       (let ((r (reify-s (car v) r)))
 	(reify-s (cdr v) r)))
@@ -95,7 +98,7 @@
 (defun reify (v)
   (lambda (s)
     (let ((v (walk* v s)))
-      (let ((r (reify-s v (empty-subst))))
+      (let ((r (reify-s v '(SUBST))))
 	(walk* v r)))))
 
 (defun == (u v)
@@ -110,9 +113,13 @@
 	  (apply (== o t) (list new-s))
 	(apply (== o nil) (list s))))))
 
-(defun succeed () (lambda (s) `(,s)))
+(defun succeed ()
+  (lambda (s)
+    `(,s)))
 
-(defun fail () (lambda (s) (declare (ignore s)) '()))
+(defun fail ()
+  (lambda (s)
+    '()))
 
 (defun append-inf (s-inf t-inf)
   (cond
@@ -125,9 +132,8 @@
 
 (defun disj2 (g1 g2)
   (lambda (s)
-    (with-fast-alist s
-		     (append-inf (apply g1 (list s))
-				 (apply g2 (list s))))))
+    (append-inf (apply g1 (list s))
+		(apply g2 (list s)))))
 
 (defun take-inf (n s-inf)
   (cond
@@ -156,7 +162,8 @@
   (apply f (list (lvar name))))
 
 (defun run-goal (n g)
-  (take-inf n (apply g (list (empty-subst)))))
+  (take-inf n (apply g (list '(SUBST)))))
+
 
 (defmacro disj (gs)
   `(cond
@@ -196,11 +203,10 @@
   `(fresh-help ,xs ,gs))
 
 (defmacro defrel (name xs &rest gs)
-  (let ((s (gensym)))
-    `(acl2::defun ,name ,xs
-		  (lambda (,s)
-		    (lambda ()
-		      (apply (conj ,gs) (list ,s)))))))
+  `(acl2::defun ,name ,xs
+		(lambda (s)
+		  (lambda ()
+		    (apply (conj ,gs) (list s))))))
 
 (defmacro run* (q &rest gs)
   `(run nil ,q . ,gs))
@@ -227,12 +233,4 @@
 ;;;;;;;;;;;;;
 ;; trying stuff out with hons
 
-#|
-(defrel appendo (l1 l2 o)
-  (conde
-   ((== l1 '()) (== l2 o))
-   ((fresh (a d r)
-	   (== l1 `(,a . ,d))
-	   (== o `(,a . ,r))
-	   (appendo d l2 r)))))
-|#
+(hons-get '(LVAR a)) (hons-acons! '(LVAR a) 2 (hons-acons! '(LVAR a) 3 nil))

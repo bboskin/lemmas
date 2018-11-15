@@ -25,6 +25,52 @@ from the function.
 |#
 
 ;; basic recognizers
+
+(defrel listpo (e)
+  (conde
+   ((endpo e))
+   ((conspo e))))
+
+(defrel listpo-fn (e o)
+  (conde
+   ((== e nil) (== o t))
+   ((conspo e) (== o t))
+   ((== e t) (== o nil))
+   ((numberpo e) (== o nil))
+   ((varpo e) (== o nil))
+   ((nonvarpo e) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
+
+(defrel improper-conspo (e)
+  (fresh (d)
+    (cdro e d)
+    (conde
+     ((improper-conso d))
+     ((numberpo d))
+     ((symbolpo d))
+     ((charpo d))
+     ((stringpo d)))))
+
+(defrel true-listpo (e)
+  (conde
+   ((endpo e))
+   ((conspo e)
+    (fresh (d)
+      (cdro e d)
+      (true-listpo d)))))
+
+(defrel true-listpo-fn (e o)
+  (conde
+   ((true-listpo e) (== o t))
+   ((== e t) (== o nil))
+   ((improper-conspo e) (== o nil))
+   ((numberpo e) (== o nil))
+   ((varpo e) (== o nil))
+   ((nonvarpo e) (== o nil))
+   ((stringpo e) (== o nil))
+   ((charpo s) (== o nil))))
+
 (defrel booleanpo (e)
   (conde
    ((== e t))
@@ -32,20 +78,26 @@ from the function.
 
 (defrel booleanpo-fn (e o)
   (conde
+   ((varpo e) (== o nil))
+   ((nonvarpo e) (== o nil))
    ((booleanpo e) (== o t))
    ((conspo e) (== o nil))
    ((numberpo e) (== o nil))
-   ((varpo e) (== o nil))
    ((stringpo e) (== o nil))
    ((charpo s) (== o nil))))
 
 (defrel varpo (e)
   (fresh (v)
-	 (== e `(INTERNAL-SYMBOL ,v))))
+	 (== e `(INTERNAL-VARSYMBOL ,v))))
+
+(defrel nonvarpo (e)
+  (fresh (v)
+     (== e `(INTERNAL-SYMBOL ,v))))
 
 (defrel varpo-fn (e o)
   (conde
    ((varpo e) (== o t))
+   ((nonvarpo e) (== o nil))
    ((booleanpo e) (== o nil))
    ((conspo e) (== o nil))
    ((numberpo e) (== o nil))
@@ -54,12 +106,15 @@ from the function.
 
 (defun build-sym (sy)
   (if (symbolp sy)
-      `(INTERNAL-SYMBOL ,sy)
+      (if (acl2s::varp sy)
+	  `(INTERNAL-VARSYMBOL ,sy)
+	`(INTERNAL-SYMBOL ,sy))
     (error "Not a symbol: ~a" s)))
 
 (defrel symbolpo (sy)
   (conde
    ((varpo sy))
+   ((nonvarpo sy))
    ((booleanpo sy))))
 
 (defrel symbolpo-fn (sy o)
@@ -75,6 +130,7 @@ from the function.
   (conde
    ((== e t))
    ((varpo e))
+   ((nonvarpo e))
    ((numberpo e))
    ((conspo e))
    ((stringpo e))
@@ -96,8 +152,7 @@ from the function.
   (conde
    ((conspo e) (== o t))
    ((numberpo e) (== o nil))
-   ((varpo e) (== o nil))
-   ((booleanpo e) (== o nil))
+   ((symbolpo e) (== o nil))
    ((stringpo e) (== o nil))
    ((charpo s) (== o nil))))
 
@@ -128,6 +183,21 @@ from the function.
 	   (leno d r)
 	   (do-pluso '(INTERNAL-NUMBER (0) 1) r n)))))
 
+(defrel membero (x ls)
+  (fresh (a d)
+    (conso a d ls)
+    (conde
+     ((== a x))
+     ((membero x d)))))
+
+(defrel membero-fn (x ls o)
+  (conde
+   ((== ls nil) (== o nil))
+   ((fresh (a d)
+      (conso a d ls)
+      (conde
+       ((== a x) (== o t))
+       ((membero-fn x d o)))))))
 
 ;; boolean functions that return values
 (defrel ando (e1 e2 o)
@@ -164,8 +234,7 @@ from the function.
    ((negpo n) (== o nil))
    ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
-   ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))
+   ((symbolpo n) (== o nil))
    ((stringpo e) (== o nil))
    ((charpo s) (== o nil))))
 
@@ -179,8 +248,7 @@ from the function.
    ((negpo n) (== o nil))
    ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
-   ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))
+   ((symbolpo n) (== o nil))
    ((stringpo e) (== o nil))
    ((charpo s) (== o nil))))
 
@@ -197,8 +265,7 @@ from the function.
    ((negpo n) (== o nil))
    ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
-   ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))
+   ((symbolpo n) (== o nil))
    ((stringpo e) (== o nil))
    ((charpo s) (== o nil))))
 
@@ -213,8 +280,7 @@ from the function.
    ((negpo n) (== o t))
    ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
-   ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))
+   ((symbolpo n) (== o nil))
    ((stringpo e) (== o nil))
    ((charpo s) (== o nil))))
 
@@ -228,8 +294,7 @@ from the function.
    ((integerpo n) (== o t))
    ((rationalp-exclu n) (== o nil))
    ((conspo n) (== o nil))
-   ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))
+   ((symbolpo n) (== o nil))
    ((stringpo e) (== o nil))
    ((charpo s) (== o nil))))
 
@@ -248,8 +313,7 @@ from the function.
   (conde
    ((rationalpo n) (== o t))
    ((conspo n) (== o nil))
-   ((varpo n) (== o nil))
-   ((booleanpo n) (== o nil))
+   ((symbolpo n) (== o nil))
    ((stringpo e) (== o nil))
    ((charpo s) (== o nil))))
 
@@ -470,6 +534,16 @@ from the function.
       (do-timeso-with-rationals n m o)))))
 
 (defrel do-sqro (n o) (do-timeso n n o))
+
+(defrel do-expto (n pow o)
+  (conde
+   ((zeropo pow) (== o '(INTERNAL-NUMBER (0) 1)))
+   ((pospo pow)
+    (fresh (pow-1 r)
+	   (do-pluso '(INTERNAl-NUMBER (0) 1) pow-1 pow)
+	   (do-expto n pow-1 r)
+	   (do-timeso n r o)))))
+
 
 ;;; less than and leq as pure goals
 ;;; they assume that the numbers provided are simplified 

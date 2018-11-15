@@ -19,12 +19,20 @@
   (declare (ignore form args))
   (acl2::raise "Wrong version of suggest-lemma-inner is being called"))
 
-(acl2::define gen-rel-inner ((name symbolp) (vars true-listp)
+(acl2::define defunc2- ((name symbolp) (vars true-listp)
 		       body state)
   :returns (mv a b state)
   (declare (ignore name vars body)
 	   (xargs :stobjs state))
-  (mv nil (acl2::raise "Wrong version of gen-rel-inner is being called") state))
+  (mv nil (acl2::raise "Wrong version of defunc2- is being called") state))
+
+(acl2::define defdata2- ((exprs true-listp) ;state
+			 )
+  :returns (nil); (mv a b state)
+  (declare (ignore exprs)
+	   ;(xargs :stobjs state)
+	   )
+  (acl2::raise "Wrong version of defdata2- is being called"))
 
 #|
 
@@ -52,9 +60,11 @@
 
 (acl2::include-raw "compile-raw.lsp" :do-not-compile t)
 (acl2::include-raw "interp-raw.lsp" :do-not-compile t)
+(acl2::include-raw "compile-defdata-raw.lsp" :do-not-compile t)
 
 (acl2::include-raw "suggest-lemma-raw.lsp" :do-not-compile t)
 (acl2::include-raw "defunc2-raw.lsp" :do-not-compile t)
+(acl2::include-raw "compile-defdata-raw.lsp" :do-not-compile t)
 
 (defmacro suggest-lemma (form &rest args)
   `(suggest-lemma-inner ',form ',args))
@@ -62,11 +72,17 @@
 (defmacro defunc2 (name vars ic-ig ic oc-ig oc body)
   (declare (ignore ic-ig oc-ig))
   `(progn!
-    (gen-rel-inner ',name ',vars ',body state)
+    (defunc2- ',name ',vars ',body state)
     (defunc ,name ,vars
       :input-contract ,ic
       :output-contract ,oc
       ,body)))
+
+(defmacro defdata2 (&rest exprs)
+  `(progn!
+    (defdata2- ',exprs ;state
+      )
+    (defdata . ,exprs)))
 
 (defmacro defgroup (name &rest args)
  `(defgroup-inner ',name ',args))
