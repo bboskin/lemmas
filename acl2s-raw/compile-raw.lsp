@@ -70,6 +70,14 @@
    ((equal form 'cdr) '(1 cdro))
    (t (function-is-known? form))))
 
+(defun gather-names (es)
+  (cond
+   ((endp es) nil)
+   (t (let ((e (car es)))
+	(if (car e)
+	    (cons (cadr e) (gather-names (cdr es)))
+	  (gather-names (cdr es)))))))
+
 (defun do-rec (form es dest)
   (let ((es (mapcar #'miniKanrenize-go es))
 	(v (compiler-knows-function? form)))
@@ -77,7 +85,10 @@
 	   (identity (cadr v))
 	   (rel-name (if arity (cdr v) (cddr v))))
       (cond
-       ((not arity) (complete-recursion-inner-nary (car rel-name) identity dest es))
+       ((not arity)
+	(let ((names (gather-names es)))
+	  `(fresh ,names
+		  ,(complete-recursion-inner-nary (car rel-name) identity dest es))))
        ((equal arity (length es)) (complete-recursion rel-name dest es))
        (t (error "Wrong number of args given to ~a" form))))))
 
@@ -121,9 +132,10 @@
 ;; miniKanrenize helpers for special cases
 
 ;; conditionals
+
 (defun miniKanrenize-cond (lines negations dest)
   (cond
-   ((endp lines) `(((== ,dest nil))))
+   ((endp lines) `(((fail))))
    (t (let* ((line1 (car lines))
 	     (test (miniKanrenize-bool (car line1)))
 	     (test-neg (miniKanrenize-bool `(not ,(car line1)))))
@@ -132,6 +144,20 @@
 	     `(,test ,@negations ,(miniKanrenize (cadr line1) dest))
 	     (miniKanrenize-cond (cdr lines) (cons test-neg negations) dest))
 	  `(((fail))))))))
+#|
+;; faster, less precise alternative
+(defun miniKanrenize-cond (lines dest)
+  (cond
+   ((endp lines) `(((== ,dest nil))))
+   (t (let* ((line1 (car lines))
+	     (test (miniKanrenize-bool (car line1))))
+	(if line1
+	    (cons
+	     `(,test ,(miniKanrenize (cadr line1) dest))
+	     (miniKanrenize-cond (cdr lines) dest))
+	  `(((fail))))))))
+|#
+
 
 (defun miniKanrenize-if (expr dest)
   (let ((test (cadr expr))

@@ -102,12 +102,12 @@
 	    (== expr `(cond . ,es))
 	    (do-cond es ρ o)))
     ;; everything else -- standard recursion & completion
-    . ,(mapcar #'make-init-value-of-clause built-ins)))
+    . ,(mapcar #'make-init-value-of-clause lemma-built-ins)))
 
 (defun all-lines ()
   (append 
    '(var boolean symbol number string char cons car cdr let if cond)
-   (mapcar #'car built-ins)))
+   (mapcar #'car lemma-built-ins)))
 
 (defun make-init-has-arity-clause (pr)
   (let ((name (car pr))
@@ -128,7 +128,7 @@
     ((== form 'stringp) (== n 1))
     ((== form 'charp) (== n 1))
     ((== form 'cond))
-    ,@(mapcar #'make-init-has-arity-clause built-ins)
+    ,@(mapcar #'make-init-has-arity-clause lemma-built-ins)
     ((succeed))))
 
 (defmacro reset-interp ()
@@ -197,3 +197,9 @@
     (contains-forms forms e))
    ((contains-forms forms e)
     (passes-tests e tests results))))
+
+#|(defrel find-equivalent (forms e tests results)
+  (conde
+   ((passes-tests e tests results)
+    (contains-forms forms e))))
+|#

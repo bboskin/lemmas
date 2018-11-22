@@ -78,7 +78,7 @@
 	(append current-lines (list name)))
       (defun expr-for-has-arity ()
 	(append current-arities (list new-arity-clause)))
-      (defparameter built-ins (cons `(,name ,num-args ,rel-name) built-ins))
+      (defparameter lemma-built-ins (cons `(,name ,num-args ,rel-name) lemma-built-ins))
       (eval `(defrel value-of (expr ρ o)
 	       ,(expr-for-value-of)))
       (eval `(defrel has-arity (form n)
@@ -88,4 +88,4 @@
 (defun all-lines ()
   (append 
    '(var boolean symbol number string char cons car cdr let if cond)
-   (mapcar #'car built-ins)))
+   (mapcar #'car lemma-built-ins)))

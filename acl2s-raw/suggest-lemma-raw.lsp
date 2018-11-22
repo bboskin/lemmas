@@ -216,6 +216,9 @@ The keywords for suggest-lemma are:
 (defun final-test (hyps from to)
   (let ((state *the-live-state*))
     (progn!
+     (print "form tested")
+     (print `(implies ,hyps (equal ,from ,to)))
+     
      (acl2::ld `((mv-let
 		  (cx? v state)
 		  (acl2s::itest? (implies ,hyps (equal ,from ,to)))
@@ -247,10 +250,13 @@ The keywords for suggest-lemma are:
     res))
 
 
-(defun suggest-lemma-loop (i forms hyps start tests)
+(defun suggest-lemma-loop (i forms hyps start tests old-v-of)
   (if (>= i 5)
-      (list "COULDN'T FIND A SOLUTION!"
-	    "Try adding more hypotheses, or giving extra hints")
+      (progn
+	(eval `(defrel value-of (expr ρ o)
+		 ,old-v-of))
+	(list "COULDN'T FIND A SOLUTION!"
+	      "Try adding more hypotheses, or giving extra hints"))
     (let* ((cleaned-tests (mapcar #'coerce-tests tests))
 	   (new-tests (mapcar #'clean-tests cleaned-tests))
 	   (results (mapcar #'clean-val
@@ -269,9 +275,12 @@ The keywords for suggest-lemma are:
 	(get-final hyps start form)
 	(let ((res (@ result)))
 	  (if (not (car (@ result)))
-	      (final-statement hyps start form)
+	      (progn
+		(eval `(defrel value-of (expr ρ o)
+			 ,old-v-of))
+		(final-statement hyps start form))
 	    (suggest-lemma-loop (+ i 1) forms hyps start
-				(append (cdadr (@ result)) tests))))))))
+				(append (cdadr (@ result)) tests) old-v-of)))))))
 
 (defun suggest-lemma-inner (start xargs)
   (multiple-value-bind
@@ -280,13 +289,15 @@ The keywords for suggest-lemma are:
    (let* (;;setting up the evaluator
 	  (new-forms (clean-expr forms))
 	  (req (get-lines new-forms (all-lines) (all-groups)))
-	  (incs (if (not with) (cons 'var req)
-		  (cons 'var (get-lines with (all-lines) (all-groups)))))
+	  (incs (if (not with) (cons 'var (cons 'boolean req))
+		  (cons 'var (cons 'boolean (get-lines with (all-lines)
+						       (all-groups))))))
 	  (excs (if (not excl) nil
 		  (get-lines excl (all-lines) (all-groups))))
 	  (lns (append req (except incs excs)))
+	  (old-v-of (expr-for-value-of))
 	  (new-e (new-val-of lns
-			     (cdr (expr-for-value-of))
+			     (cdr old-v-of)
 			     (all-lines)))
 	  ;; setting up hypotheses
 	  (contract-hyps (get-hyps start))
@@ -295,12 +306,12 @@ The keywords for suggest-lemma are:
      (eval `(defrel value-of (expr ρ o)
 	      (conde . ,new-e)))
      (get-tests hyps)
-     (suggest-lemma-loop 1 new-forms hyps start (cdadr (@ result))))))
+     (suggest-lemma-loop 1 new-forms hyps start (cdadr (@ result)) old-v-of))))
 
 (defun all-lines ()
   (append 
    '(var boolean symbol number string char cons car cdr let if cond)
-   (mapcar #'car *interp-built-ins*)))
+   (mapcar #'car lemma-built-ins)))
 
 (defun all-groups () '(all-lines))
       

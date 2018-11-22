@@ -120,3 +120,22 @@
 (suggest-lemma 4
 	       :required-expressions eval-expr
 	       :with number)
+
+
+
+;;;;;Seeing if this can do lattice-y queries
+
+(defgroup types
+  natp integerp posp
+  rationalp
+  stringp characterp
+  symbolp
+  consp true-listp)
+
+(defgroup short-types
+  natp integerp posp rationalp stringp characterp symbolp varp booleanp
+  consp true-listp listp)
+
+(suggest-lemma (integerp e)
+	       :required-expressions (natp e) (negp e)
+	       :with types or)

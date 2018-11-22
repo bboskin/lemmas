@@ -1,100 +1,5 @@
 (in-package "ACL2S")
 
-
-;(load "interp-raw.lsp")
-;(load "to-acl2-raw.lsp")
-
-;(load "itest-cgen.lisp")
-;(load "itest-ithm.lisp")
-;;;;;;;;;;;;;;;;;;;;;;
-;; Forms to create valid expressions
-
-;; We now have support for rational numbers!
-;; But, certain operations are slow for rationals with large num/denoms,
-;; so (hopefully only for now) we use mod.
-
-(defun fix-atom (e)
-  (cond
-   ((symbolp e) e)
-   ((characterp e) (build-char e))
-   ((stringp e) (build-string e))
-   ((rationalp e) (build-num e))
-   ;; complex numbers become nil
-   (t nil)))
-
-
-;; add tags to quoted values, creating valid expressions
-(defun fix-values (e)
-  (cond
-   ((consp e)
-    `(cons ,(fix-values (car e))
-	   ,(fix-values (cdr e))))
-   ((booleanp e) e)
-   ((symbolp e) (build-sym e))
-   (t (fix-atom e))))
-
-;; take input expressions, find quoted terms (and numbers), and fix.
-;; uses values->expressions under quote, and otherwise only changes numbers
-(defun clean-expr (e)
-  (cond
-   ((not (consp e)) (fix-atom e))
-   ((equal (car e) 'quote) (fix-values (cadr e)))
-   (t (cons (clean-expr (car e))
-	    (clean-expr (cdr e))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; forms to create valid values from test cases (for environment)
-
-(defun elim-quote (exp)
-  (cond
-   ((symbolp exp) exp)
-   ((not (consp exp)) exp)
-   ((equal (car exp) 'quote) (elim-quote (cadr exp)))
-   (t (cons (elim-quote (car exp))
-	    (elim-quote (cdr exp))))))
-
-(defun coerce-val (pr)
-  (list (car pr) (elim-quote (cadr pr))))
-
-(defun coerce-tests (tests)
-  (mapcar #'coerce-val tests))
-
-(defun clean-val (exp)
-  (cond
-   ((booleanp exp) exp)
-   ((symbolp exp) (build-sym exp))
-   ((not (consp exp)) (fix-atom exp))
-   ((equal (car exp) 'quote) (clean-val (cadr exp)))
-   ((consp exp)
-    (list 'INTERNAL-CONS (clean-val (car exp))
-	  (clean-val (cdr exp))))))
-
-(defun clean-pr (pr)
-  (list (car pr) (clean-val (cadr pr))))
-
-(defun clean-tests (alist) (mapcar #'clean-pr alist))
-
-;;; Takes synthesized expressions, and removes evidence
-;; of internal values
-(defun read-back (v)
-  (cond
-   ((symbolp v) v)
-   ((consp v)
-    (let ((tag (car v)))
-      (cond
-       ((equal tag 'INTERNAL-SYMBOL) (cadr v))
-       ((equal tag 'INTERNAL-VARSYMBOL) (cadr v))
-       ((equal tag 'INTERNAL-CHAR) (cadr v))
-       ((equal tag 'INTERNAL-NUMBER) (read-back-num v))
-       ((equal tag 'INTERNAL-STRING) (read-back-string (cdr v)))
-       ((equal tag 'INTERNAL-CONS)
-	(cons (read-back (cadr v))
-	      (read-back (caddr v))))
-       (t (cons (read-back tag)
-		(read-back (cdr v)))))))))
-
-;; suggest-lemma
-
 (defun subs (x v e)
   (cond
    ((equal e x) `',v)
@@ -311,6 +216,9 @@ The keywords for suggest-lemma are:
 (defun final-test (hyps from to)
   (let ((state *the-live-state*))
     (progn!
+     (print "form tested")
+     (print `(implies ,hyps (equal ,from ,to)))
+     
      (acl2::ld `((mv-let
 		  (cx? v state)
 		  (acl2s::itest? (implies ,hyps (equal ,from ,to)))
@@ -342,10 +250,13 @@ The keywords for suggest-lemma are:
     res))
 
 
-(defun suggest-lemma-loop (i forms hyps start tests)
+(defun suggest-lemma-loop (i forms hyps start tests old-v-of)
   (if (>= i 5)
-      (list "COULDN'T FIND A SOLUTION!"
-	    "Try adding more hypotheses, or giving extra hints")
+      (progn
+	(eval `(defrel value-of (expr ρ o)
+		 ,old-v-of))
+	(list "COULDN'T FIND A SOLUTION!"
+	      "Try adding more hypotheses, or giving extra hints"))
     (let* ((cleaned-tests (mapcar #'coerce-tests tests))
 	   (new-tests (mapcar #'clean-tests cleaned-tests))
 	   (results (mapcar #'clean-val
@@ -364,9 +275,12 @@ The keywords for suggest-lemma are:
 	(get-final hyps start form)
 	(let ((res (@ result)))
 	  (if (not (car (@ result)))
-	      (final-statement hyps start form)
+	      (progn
+		(eval `(defrel value-of (expr ρ o)
+			 ,old-v-of))
+		(final-statement hyps start form))
 	    (suggest-lemma-loop (+ i 1) forms hyps start
-				(append (cdadr (@ result)) tests))))))))
+				(append (cdadr (@ result)) tests) old-v-of)))))))
 
 (defun suggest-lemma-inner (start xargs)
   (multiple-value-bind
@@ -375,13 +289,15 @@ The keywords for suggest-lemma are:
    (let* (;;setting up the evaluator
 	  (new-forms (clean-expr forms))
 	  (req (get-lines new-forms (all-lines) (all-groups)))
-	  (incs (if (not with) (cons 'var req)
-		  (cons 'var (get-lines with (all-lines) (all-groups)))))
+	  (incs (if (not with) (cons 'var (cons 'boolean req))
+		  (cons 'var (cons 'boolean (get-lines with (all-lines)
+						       (all-groups))))))
 	  (excs (if (not excl) nil
 		  (get-lines excl (all-lines) (all-groups))))
 	  (lns (append req (except incs excs)))
+	  (old-v-of (expr-for-value-of))
 	  (new-e (new-val-of lns
-			     (cdr (expr-for-value-of))
+			     (cdr old-v-of)
 			     (all-lines)))
 	  ;; setting up hypotheses
 	  (contract-hyps (get-hyps start))
@@ -390,12 +306,12 @@ The keywords for suggest-lemma are:
      (eval `(defrel value-of (expr ρ o)
 	      (conde . ,new-e)))
      (get-tests hyps)
-     (suggest-lemma-loop 1 new-forms hyps start (cdadr (@ result))))))
+     (suggest-lemma-loop 1 new-forms hyps start (cdadr (@ result)) old-v-of))))
 
 (defun all-lines ()
   (append 
    '(var boolean symbol number string char cons car cdr let if cond)
-   (mapcar #'car *interp-built-ins*)))
+   (mapcar #'car lemma-built-ins)))
 
 (defun all-groups () '(all-lines))
       

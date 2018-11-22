@@ -1,0 +1,7 @@
+(defttag t)
+(include-book "top" :uncertified-okp t)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;;Example 1: The exam Lemma
+;;;;;;;;;;;;;;;;;;;;;;;;;

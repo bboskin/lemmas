@@ -134,7 +134,7 @@
 ;; all function symbols, 'boolean' function symbols,
 ;; and their relational counterparts and arities
 
-(defparameter built-ins
+(defparameter lemma-built-ins
   '((append nil nil appendo) (reverse 1 reverso) (len 1 leno) (member 2 membero-fn)
     (+ nil 0 do-pluso) (- 2 do-minuso) (* nil 1 do-timeso)
     (sqr 1 do-sqro) (expt 2 do-expto)
@@ -157,7 +157,7 @@
 ;; if a function is known, this returns the expected arity and relation symbol,
 ;; otherwise errors.
 (defun function-is-known? (fn)
-  (let ((v (assoc fn built-ins)))
+  (let ((v (assoc fn lemma-built-ins)))
     (if v (cdr v)
       (error "Unknown function symbol ~s" fn))))
 

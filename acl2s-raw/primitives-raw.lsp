@@ -46,7 +46,7 @@ from the function.
   (fresh (d)
     (cdro e d)
     (conde
-     ((improper-conso d))
+     ((improper-conspo d))
      ((numberpo d))
      ((symbolpo d))
      ((charpo d))
@@ -154,7 +154,7 @@ from the function.
    ((numberpo e) (== o nil))
    ((symbolpo e) (== o nil))
    ((stringpo e) (== o nil))
-   ((charpo s) (== o nil))))
+   ((charpo e) (== o nil))))
 
 
 ;; Other built-in list functions: append, reverse
