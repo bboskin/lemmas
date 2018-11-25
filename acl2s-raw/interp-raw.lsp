@@ -144,6 +144,7 @@
 
 ;; Constraints on expressions
 
+#|
 (defrel contains-form (form e)
   (conde
    ((== form e))
@@ -173,6 +174,84 @@
 	    ((contains-form form e2))
 	    ((contains-form form e3))
 	    ((contains-form form e4)))))))
+|#
+
+
+
+#|
+Attempt to encode Herbrand levels
+
+(defrel one-contains-form (form es n)
+  (fresh (a d)
+    (== es `(,a . ,d))
+    (conde
+     ((contains-form form a n))
+     ((one-contains-form form d n)))))
+
+(defrel contains-form (form e n)
+  (conde
+   ((== form e))
+   ((has-arity form 1)
+    (fresh (e1) (== e `(,form ,e1))))
+   ((has-arity form 2)
+    (fresh (e1 e2) (== e `(,form ,e1 ,e2))))
+   ((has-arity form 3)
+    (fresh (e1 e2 e3) (== e `(,form ,e1 ,e2 ,e3))))
+   ((fresh (op es)
+      (== e `(,op . ,es))
+      (conde
+       ((== op form))
+       ((fresh (n-1)
+	  (pluso '(1) n-1 n)
+	  (one-contains-form form es n-1))))))))
+
+(defrel contains-forms (fms e n)
+  (conde
+   ((== '() fms))
+   ((fresh (a d)
+	   (== fms `(,a . ,d))
+	   (contains-form a e n)
+	   (contains-forms d e n)))))
+
+(defrel passes-tests (e2 tests results)
+     (conde
+      ((== tests '()))
+      ((fresh (a d v r1 rs)
+	      (== tests `(,a . ,d))
+	      (== results `(,r1 . ,rs))
+	      (value-of e2 a r1)
+	      (passes-tests e2 d rs)))))
+
+(defrel find-equivalent (n forms e tests results)
+  (conde
+   ((contains-forms forms e n)
+    (passes-tests e tests results))
+   ((fresh (n+1)
+      (pluso '(1) n n+1)
+      (find-equivalent n+1 forms e tests results)))))
+|#
+
+(defrel one-contains-form (form es)
+  (fresh (a d)
+    (== es `(,a . ,d))
+    (conde
+     ((contains-form form a))
+     ((one-contains-form form d)))))
+
+(defrel contains-form (form e)
+  (conde
+   ((== form e))
+   ((has-arity form 1)
+    (fresh (e1) (== e `(,form ,e1))))
+   ((has-arity form 2)
+    (fresh (e1 e2) (== e `(,form ,e1 ,e2))))
+   ((has-arity form 3)
+    (fresh (e1 e2 e3) (== e `(,form ,e1 ,e2 ,e3))))
+   ((fresh (op es)
+      (== e `(,op . ,es))
+      (conde
+       ((== op form))
+       ((one-contains-form form es)))))))
 
 (defrel contains-forms (fms e)
   (conde
@@ -193,13 +272,12 @@
 
 (defrel find-equivalent (forms e tests results)
   (conde
-   ((passes-tests e tests results)
-    (contains-forms forms e))
+   ;((passes-tests e tests results))
    ((contains-forms forms e)
-    (passes-tests e tests results))))
+    (passes-tests e tests results)))
+  (contains-forms forms e))
+#|
 
-#|(defrel find-equivalent (forms e tests results)
-  (conde
-   ((passes-tests e tests results)
-    (contains-forms forms e))))
 |#
+
+

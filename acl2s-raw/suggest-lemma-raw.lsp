@@ -72,20 +72,22 @@
 
 (defun keywords ()
   '(:required-expressions
-    :exclude
     :with
-    :hyps))
+    :hyps
+    :exclude
+    :complete-hyps))
 #|
 The keywords for suggest-lemma are:
 
 :required-forms <- These are the sub-expressions/forms that the 
                     returned expression must include
 
-:exclude <- this tells the system to not 
-             permit certain forms to be in the expressions 
-             (can be forms and groups)
+:complete-hyps <- when set to nil, this tells the 
+                  system that all desired hyps are included 
 
 :with <- this tells the system which forms can appear (can be forms and groups)
+
+:exclude <- tells the system for forms to exclude
 
 :restrict (t/nil) <– default is nil. this says 
            that ONLY forms from required-forms
@@ -100,9 +102,9 @@ The keywords for suggest-lemma are:
 	(list (cons (car e) (car v))
 	      (cadr v))))))
 
-(defun parse-xargs (xargs req excl with hyps)
+(defun parse-xargs (xargs req excl with hyps complete?)
   (cond
-   ((endp xargs) (values req excl with hyps))
+   ((endp xargs) (values req excl with hyps complete?))
    (t (let* ((kw (car xargs))
 	     (v (get-args (cdr xargs)))
 	     (args (car v))
@@ -110,16 +112,21 @@ The keywords for suggest-lemma are:
 	(cond
 	 ((equal kw ':required-expressions)
 	  (if req (error "Two occurrences of :required-expressions")
-	    (parse-xargs rst args excl with hyps)))
+	    (parse-xargs rst args excl with hyps complete?)))
+	 ((equal kw ':complete-hyps)
+	  (if excl (error "Two occurrences of :complete-hyps")
+	    (if (not (and (consp args) (booleanp (car args))))
+		(error "Expected a boolean in :complete-hyps")
+	      (parse-xargs rst req excl with hyps (car args)))))
 	 ((equal kw ':exclude)
 	  (if excl (error "Two occurrences of :exclude")
-	    (parse-xargs rst req args with hyps)))
+	    (parse-xargs rst req args with hyps complete?)))
 	 ((equal kw ':hyps)
-	  (if hyps (error "Two occurrences of :exclude")
-	    (parse-xargs rst req excl with args)))
+	  (if hyps (error "Two occurrences of :hyps")
+	    (parse-xargs rst req excl with args complete?)))
 	 ((equal kw ':with)
 	  (if with (error "Two occurrences of :with")
-	    (parse-xargs rst req excl args hyps)))
+	    (parse-xargs rst req excl args hyps complete?)))
 	 (t (error "invalid keyword ~a" kw)))))))
 
 (defun except (l1 l2)
@@ -133,13 +140,15 @@ The keywords for suggest-lemma are:
 (defun make-ex (e tag)
   (if (> (length e) 1) `(,tag . ,e) (car e)))
 
-(defun find-hyps (form)
+(defun find-hyps (form complete?)
   (let ((state *the-live-state*))
     (declare (stobjs state))
     (progn!
      (acl2::ld `((mv-let
 		  (v g)
-		  (acl2s::guard-obligation ',form nil nil 'top-level state)
+		  (if ,complete?
+		      (acl2s::guard-obligation ',form nil nil 'top-level state)
+		    (mv nil '(nil nil)))
 		  (declare (ignore v))
 		  (assign result g))))
      (acl2::@ result))))
@@ -169,13 +178,12 @@ The keywords for suggest-lemma are:
     (include-all-vars hyps (cdr vs)))
    (t (include-all-vars (cons `(allp ,(car vs)) hyps) (cdr vs)))))
 
-(defun get-hyps (form)
+(defun get-hyps (form compl?)
   (cond
    ((symbolp form) nil)
-   (t
-    (find-hyps form)
-    (mapcar #'(lambda (e) (make-ex e 'or))
-	    (cadr (@ result))))))
+   (t (find-hyps form compl?)
+      (mapcar #'(lambda (e) (make-ex e 'or))
+	      (cadr (@ result))))))
 
 (defun subsumed? (e1 e2)
   (let ((state *the-live-state*))
@@ -235,15 +243,15 @@ The keywords for suggest-lemma are:
 
 (defun final-statement (hyps start form)
   (let* ((hyps (remove-allp-hyps hyps))
+	 (expr (if (equal start t) form `(equal ,start ,form)))
 	 (msg (if (equal start form)
 		  "Please provide more constraints on the expression you would like me to find. The best I can do is:"
 		"We found the following potential theorem:"))
 	 (res (cond
-	       ((endp hyps) `(equal ,start ,form))
+	       ((endp hyps) expr)
 	       ((equal (length hyps) 1)
-		`(implies ,(car hyps) (equal ,start ,form)))
-	       (t `(implies (and . ,hyps)
-			    (equal ,start ,form))))))
+		`(implies ,(car hyps) ,expr))
+	       (t `(implies (and . ,hyps) ,expr)))))
     (cw "***********Beginning of Synthesis Output*****************")
     (print msg)
     (print "")
@@ -284,14 +292,16 @@ The keywords for suggest-lemma are:
 
 (defun suggest-lemma-inner (start xargs)
   (multiple-value-bind
-   (forms excl with hyps)
-   (parse-xargs xargs nil nil nil nil)
+   (forms excl with hyps compl?)
+   (parse-xargs xargs nil nil nil nil t)
    (let* (;;setting up the evaluator
 	  (new-forms (clean-expr forms))
 	  (req (get-lines new-forms (all-lines) (all-groups)))
 	  (incs (if (not with) (cons 'var (cons 'boolean req))
-		  (cons 'var (cons 'boolean (get-lines with (all-lines)
-						       (all-groups))))))
+		  (cons 'var (get-lines with (all-lines)
+					(all-groups)))
+		  #|(cons 'var (cons 'boolean (get-lines with (all-lines)
+						       (all-groups))))|#))
 	  (excs (if (not excl) nil
 		  (get-lines excl (all-lines) (all-groups))))
 	  (lns (append req (except incs excs)))
@@ -300,7 +310,7 @@ The keywords for suggest-lemma are:
 			     (cdr old-v-of)
 			     (all-lines)))
 	  ;; setting up hypotheses
-	  (contract-hyps (get-hyps start))
+	  (contract-hyps (get-hyps start compl?))
 	  (hyps (include-all-vars (append contract-hyps hyps)
 				  (free-vars start))))
      (eval `(defrel value-of (expr ρ o)

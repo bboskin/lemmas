@@ -122,6 +122,8 @@
    ((has-form 'cond expr)
     `(conde . ,(miniKanrenize-cond (cdr expr) nil dest)))
    ((has-form 'if expr) (miniKanrenize-if expr dest))
+   ((has-form 'or expr)
+    `(conde . ,(mapcar #'(lambda (x) (list (miniKanrenize x dest))) (cdr expr))))
    ;; subseq – since it 
    ;; the majority of forms can be handled equivalently
    ((consp expr) (do-rec (car expr) (cdr expr) dest))
@@ -223,9 +225,9 @@
     (do-rec-bool (car expr) (cdr expr)))
    ;; boolean connectors
    ((has-form 'and expr)
-    `(conj . ,(mapcar #'miniKanrenize-bool (cdr expr))))
+    `(conj ,(mapcar #'miniKanrenize-bool (cdr expr))))
    ((has-form 'or expr)
-    `(disj . ,(mapcar #'miniKanrenize-bool (cdr expr))))
+    `(disj ,(mapcar #'miniKanrenize-bool (cdr expr))))
    ((has-form 'not expr) (miniKanrenize (cadr expr) nil))
    ;; anything else just needs to return something non-nil
    (t (let ((x (next-var)))

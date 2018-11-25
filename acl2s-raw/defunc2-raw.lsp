@@ -24,7 +24,8 @@
 
 (defun add-all-to-built-ins (forms rel rel-fn)
   (cond
-   ((endp forms) (defparameter built-ins-bool (append rel built-ins-bool)))
+   ((endp forms) (progn (defparameter built-ins-bool (append rel built-ins-bool))
+			(defparameter built-ins (append rel-fn built-ins))))
    (t (let* ((f (car forms))
 	     (pf (get-pred-name f))
 	     (pf-rel (get-rel-name pf))
@@ -33,7 +34,19 @@
 	(add-all-to-built-ins (cdr forms)
 			      (cons `(,f 1 ,pf-rel) rel)
 			      (cons `(,f 1 ,pf-fn) rel-fn))))))
-
+#|
+(defdata2 
+  (expr (oneof integer 
+               symbol 
+               inc-expr
+               sq-expr
+               +-expr
+               *-expr))
+  (inc-expr (list 'inc expr))
+  (sq-expr  (list 'sq expr))
+  (+-expr   (list expr '+ expr))
+  (*-expr   (list expr '* expr)))
+|#
 ;; defdata core functions
 (defun defdata2- (exprs)
   (cond
@@ -51,7 +64,8 @@
 	(add-to-interpreter pred-name rel-fn-name 1)
 	(defparameter built-ins-bool (cons `(,pred-name 1 ,rel-name) built-ins-bool))
 	(eval (defdata2-- (car exprs) (cadr exprs)))
-	(eval (make-fn-version pred-name)))))
+	;(eval (make-fn-version pred-name))
+	)))
    ;; mutually recursive defs
    (t (progn
 	(update-types (mapcar #'car exprs))

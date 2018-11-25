@@ -34,7 +34,7 @@ this form:
 
 (defun read-back-inner (n)
   (cond
-   ((endp n) 0)
+   ((symbolp n) 0)
    (t (let ((v (if (or (equal (car n) 1)
 		       (equal (car n) 0))
 		   (car n)

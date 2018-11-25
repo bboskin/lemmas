@@ -134,9 +134,6 @@
   (cond ((not (consp x)) (cons x nil))
         (t (append (flatten (car x)) (flatten (cdr x))))))
 
-(suggest-lemma (flatten x)
-	       :with flatten)
-
 (defunc2 mc-flatten-acc (x a)
   :input-contract (and (flat-inputp x) (true-listp a))
   :output-contract (true-listp (mc-flatten-acc x a))
@@ -145,10 +142,7 @@
                            (mc-flatten-acc (cdr x) a)))))
 
 (suggest-lemma (mc-flatten-acc a l)
-	       :with mc-flatten-acc)
-
-(suggest-lemma (mc-flatten-acc a l)
-	       :with append flatten)
+	       :with flatten append)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Quicksort and Insertion sort
@@ -183,8 +177,6 @@
     (perm (cdr l1) (my-remove (car l1) l2)))
    (t nil)))
 
-(suggest-lemma (perm x x) :with boolean)
-
 ;; TODO -> add 'list' macro to compiler/interpreter (and cadr, etc.?)
 
 (defunc2 insert (x ls)
@@ -204,9 +196,8 @@
 
 (defgroup sorting-fns orderedp perm insert isort boolean)
 
-
-(suggest-lemma (orderedp (isort ls))
-	       :with sorting-fns)
+(suggest-lemma (isort ls1)
+	       :hyps (loip ls2) (orderedp ls2) (perm ls1 ls2))
 
 ;; At first this doesn't go through
 
@@ -292,9 +283,16 @@
 	       :with notless)
 
 ;; final key qsort-isort lemma
+(suggest-lemma (append (isort (less (car x) (cdr x)))
+		       (cons (car x)
+			     (isort (notless (car x) (cdr x)))))
+	       :required-expressions (car x) (cdr x)
+	       :with insert isort
+	       :hyps (consp x))
 
+;; alternate versions
 
 (suggest-lemma (insert x ls)
-	       :required-expressions (less x ls) (notless x ls)
+	       :required-expressions (less x ls) (notless x ls) 
 	       :with append cons
 	       :hyps (orderedp ls))

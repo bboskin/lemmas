@@ -10,6 +10,7 @@
   '((nat natpo natpo-fn)
     (pos pospo pospo-fn)
     (neg negpo negpo-fn)
+    (boolean booleanpo booleanpo-fn)
     (integer integerpo integerpo-fn)
     (rational rationalpo rationalpo-fn)
     (number numberpo numberpo-fn)
@@ -157,12 +158,24 @@
 	  (compile-defdata `',(@ result) input self)))))
    (t (error "Invalid datatype ~s" expr))))
 
+(defun make-fn-version-clause (name input)
+  `((,name ,input) (== o nil)))
+
+(defun make-fn-version (name))
+
 (defun defdata2-- (name expr)
   (let* ((pred-name (get-pred-name name))
-	 (rel-name (get-rel-name pred-name)))
+	 (rel-name (get-rel-name pred-name))
+	 (rel-fn-name (get-rel-fn-name pred-name)))
     (let* ((input (next-var))
 	   (expr (compile-defdata expr input name)))
-      `(defrel ,rel-name (,input) ,expr))))
+      `(progn
+	 (defrel ,rel-name (,input) ,expr)
+	 (defrel ,rel-fn-name (,input o)
+	   (conde
+	    ((,rel-name ,input) (== o t))
+	    . ,(mapcar #'(lambda (e) (make-fn-version-clause e input))
+		       (mapcar #'cadr (all-types)))))))))
 
 (defun update-types (es)
   (let ((ts (all-types))
@@ -172,19 +185,6 @@
 		     es)))
     (defun all-types ()
       (append ts new))))
-
-
-(defun make-fn-version-clause (name)
-  `((,name e) (== o nil)))
-
-(defun make-fn-version (form)
-  (let* ((form-rel (get-rel-name form))
-	 (form-rel-fn (get-rel-fn-name form)))
-    `(defrel ,form-rel-fn (e o)
-       (conde
-	((,form-rel e) (== o t))
-	. ,(mapcar #'make-fn-version-clause
-		   (mapcar #'cadr (all-types)))))))
 
 
 #|
