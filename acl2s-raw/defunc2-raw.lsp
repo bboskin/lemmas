@@ -19,7 +19,7 @@
 (defun defunc2- (name vars body state)
   (progn
     (add-to-interpreter name (get-rel-name name) (len vars))
-    (gen-mk name vars body)
+    (gen-mk name vars (preprocess body))
     (mv nil nil state)))
 
 (defun add-all-to-built-ins (forms rel rel-fn)

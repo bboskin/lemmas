@@ -115,6 +115,8 @@
    ((has-form 'cons expr) (do-rec 'cons (cdr expr) dest))
    ((has-form 'car expr) (do-rec 'car (cdr expr) dest))
    ((has-form 'cdr expr) (do-rec 'cdr (cdr expr) dest))
+   ((has-form 'first expr) (do-rec 'car (cdr expr) dest))
+   ((has-form 'rest expr) (do-rec 'cdr (cdr expr) dest))
    ;; Special cases: let, control flow
    ((has-form 'let expr) (miniKanrenize-let expr dest))
    ((has-form 'let* expr) (miniKanrenize-let* expr dest))

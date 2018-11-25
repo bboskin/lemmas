@@ -192,25 +192,25 @@ in infix notation (ex a => (B ^ C)).
 (include-book "top" :uncertified-okp t)
 
 (defunc2 len2 (x)
-     :input-contract (true-listp x)
-     :output-contract (natp (len2 x))
-     (if (endp x)
-	 0
-       (+ 1 (len2 (cdr x)))))
+  :input-contract (true-listp x)
+  :output-contract (natp (len2 x))
+  (if (endp x)
+      0
+    (+ 1 (len2 (rest x)))))
 
 (defunc2 in2 (a l)
   :input-contract (true-listp l)
   :output-contract (booleanp (in2 a l))
   (if (endp l)
       nil
-    (or (equal a (car l)) (in2 a (cdr l)))))
+    (or (equal a (first l)) (in2 a (rest l)))))
     
 (defunc2 app2 (x y)
   :input-contract (and (true-listp x) (true-listp y))
   :output-contract (true-listp (app2 x y))
   (if (endp x)
       y
-    (cons (car x) (app2 (cdr x) y))))
+    (cons (first x) (app2 (rest x) y))))
 #|
 ;;; Instructions
 
@@ -242,16 +242,25 @@ CONTRACT CHECKING:
 
 (suggest-lemma (len2 (app2 x (app2 y z)))
 	       :required-expressions len2 (app2 x y) z
-	       :with list-ops
-	       :complete-hyps nil
-	       :hyps (true-listp x) (true-listp y) (true-listp z))
-
+	       :with list-ops)
 
 (thm (IMPLIES (AND (TRUE-LISTP Y)
               (TRUE-LISTP (APP2 X (APP2 Y Z)))
               (TRUE-LISTP X)
               (TRUE-LISTP Z)
               (TRUE-LISTP (APP2 Y Z)))
+         (EQUAL (LEN2 (APP2 X (APP2 Y Z)))
+                (LEN2 (APP2 (APP2 X Y) Z)))))
+
+(suggest-lemma (len2 (app2 x (app2 y z)))
+	       :required-expressions len2 (app2 x y) z
+	       :with list-ops
+	       :complete-hyps nil
+	       :hyps (true-listp x) (true-listp y) (true-listp z))
+
+(thm (IMPLIES (AND (TRUE-LISTP X)
+              (TRUE-LISTP Y)
+              (TRUE-LISTP Z))
          (EQUAL (LEN2 (APP2 X (APP2 Y Z)))
                 (LEN2 (APP2 (APP2 X Y) Z)))))
 

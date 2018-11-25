@@ -75,7 +75,8 @@
     :with
     :hyps
     :exclude
-    :complete-hyps))
+    :complete-hyps
+    :num-trials))
 #|
 The keywords for suggest-lemma are:
 
@@ -89,9 +90,9 @@ The keywords for suggest-lemma are:
 
 :exclude <- tells the system for forms to exclude
 
-:restrict (t/nil) <– default is nil. this says 
-           that ONLY forms from required-forms
-           can be used (if :with is also used, :restrict nil makes the :with pointless, and :restrict adds nothing to the :with clause|#
+:num-trials <- overrides the max # of iterations from 5 to whatever is set
+
+|#
 
 (defun get-args (e)
   (cond
@@ -102,9 +103,9 @@ The keywords for suggest-lemma are:
 	(list (cons (car e) (car v))
 	      (cadr v))))))
 
-(defun parse-xargs (xargs req excl with hyps complete?)
+(defun parse-xargs (xargs req excl with hyps complete? trials)
   (cond
-   ((endp xargs) (values req excl with hyps complete?))
+   ((endp xargs) (values req excl with hyps complete? trials))
    (t (let* ((kw (car xargs))
 	     (v (get-args (cdr xargs)))
 	     (args (car v))
@@ -112,21 +113,26 @@ The keywords for suggest-lemma are:
 	(cond
 	 ((equal kw ':required-expressions)
 	  (if req (error "Two occurrences of :required-expressions")
-	    (parse-xargs rst args excl with hyps complete?)))
+	    (parse-xargs rst args excl with hyps complete? trials)))
 	 ((equal kw ':complete-hyps)
 	  (if excl (error "Two occurrences of :complete-hyps")
-	    (if (not (and (consp args) (booleanp (car args))))
-		(error "Expected a boolean in :complete-hyps")
-	      (parse-xargs rst req excl with hyps (car args)))))
+	    (if (not (and (equal (length args) 1) (booleanp (car args))))
+		(error "Expected one boolean in :complete-hyps")
+	      (parse-xargs rst req excl with hyps (car args) trials))))
+	 ((equal kw ':num-trials)
+	  (if excl (error "Two occurrences of :num-trials")
+	    (if (not (and (equal (length args) 1) (natp (car args))))
+		(error "Expected one nat in :num-trials")
+	      (parse-xargs rst req excl with hyps complete? (car args)))))
 	 ((equal kw ':exclude)
 	  (if excl (error "Two occurrences of :exclude")
-	    (parse-xargs rst req args with hyps complete?)))
+	    (parse-xargs rst req args with hyps complete? trials)))
 	 ((equal kw ':hyps)
 	  (if hyps (error "Two occurrences of :hyps")
-	    (parse-xargs rst req excl with args complete?)))
+	    (parse-xargs rst req excl with args complete? trials)))
 	 ((equal kw ':with)
 	  (if with (error "Two occurrences of :with")
-	    (parse-xargs rst req excl args hyps complete?)))
+	    (parse-xargs rst req excl args hyps complete? trials)))
 	 (t (error "invalid keyword ~a" kw)))))))
 
 (defun except (l1 l2)
@@ -258,11 +264,21 @@ The keywords for suggest-lemma are:
     res))
 
 
-(defun suggest-lemma-loop (i forms hyps start tests old-v-of)
-  (if (>= i 5)
+(defun final-statement/no-print (hyps start form)
+  (let* ((hyps (remove-allp-hyps hyps))
+	 (expr (if (equal start t) form `(equal ,start ,form)))
+	 (res (cond
+	       ((endp hyps) expr)
+	       ((equal (length hyps) 1)
+		`(implies ,(car hyps) ,expr))
+	       (t `(implies (and . ,hyps) ,expr)))))
+    res))
+
+
+(defun suggest-lemma-loop (i max forms hyps start tests old-v-of)
+  (if (>= i max)
       (progn
-	(eval `(defrel value-of (expr ρ o)
-		 ,old-v-of))
+	(eval `(defrel value-of (expr ρ o) ,old-v-of))
 	(list "COULDN'T FIND A SOLUTION!"
 	      "Try adding more hypotheses, or giving extra hints"))
     (let* ((cleaned-tests (mapcar #'coerce-tests tests))
@@ -282,41 +298,50 @@ The keywords for suggest-lemma are:
 						    ',results)))))))
 	(get-final hyps start form)
 	(let ((res (@ result)))
-	  (if (not (car (@ result)))
-	      (progn
-		(eval `(defrel value-of (expr ρ o)
-			 ,old-v-of))
-		(final-statement hyps start form))
-	    (suggest-lemma-loop (+ i 1) forms hyps start
-				(append (cdadr (@ result)) tests) old-v-of)))))))
+	  (cond
+	   ((not (car (@ result)))
+	    (progn
+	      (eval `(defrel value-of (expr ρ o) ,old-v-of))
+	      (final-statement hyps start form)))
+	   ((= i max)
+	    (progn
+	      (eval `(defrel value-of (expr ρ o) ,old-v-of))
+	      (cw "***********Beginning of Synthesis Output*****************")
+	      (list "COULDN'T FIND A SOLUTION!"
+		    "Try adding more hypotheses, or giving extra hints"
+		    "Here's the best thing I could find:")
+	      (final-statement/no-print hyps start form)))
+	   (t (suggest-lemma-loop (+ i 1) max forms hyps start
+				  (append (cdadr (@ result)) tests) old-v-of))))))))
 
 (defun suggest-lemma-inner (start xargs)
-  (multiple-value-bind
-   (forms excl with hyps compl?)
-   (parse-xargs xargs nil nil nil nil t)
-   (let* (;;setting up the evaluator
-	  (new-forms (clean-expr forms))
-	  (req (get-lines new-forms (all-lines) (all-groups)))
-	  (incs (if (not with) (cons 'var (cons 'boolean req))
-		  (cons 'var (get-lines with (all-lines)
-					(all-groups)))
-		  #|(cons 'var (cons 'boolean (get-lines with (all-lines)
-						       (all-groups))))|#))
-	  (excs (if (not excl) nil
-		  (get-lines excl (all-lines) (all-groups))))
-	  (lns (append req (except incs excs)))
-	  (old-v-of (expr-for-value-of))
-	  (new-e (new-val-of lns
-			     (cdr old-v-of)
-			     (all-lines)))
-	  ;; setting up hypotheses
-	  (contract-hyps (get-hyps start compl?))
-	  (hyps (include-all-vars (append contract-hyps hyps)
-				  (free-vars start))))
-     (eval `(defrel value-of (expr ρ o)
-	      (conde . ,new-e)))
-     (get-tests hyps)
-     (suggest-lemma-loop 1 new-forms hyps start (cdadr (@ result)) old-v-of))))
+  (let ((start (preprocess start)))
+    (multiple-value-bind
+     (forms excl with hyps compl? max)
+     (parse-xargs xargs nil nil nil nil t 5)
+     (let* (;;setting up the evaluator
+	    (new-forms (clean-expr forms))
+	    (req (get-lines new-forms (all-lines) (all-groups)))
+	    (incs (if (not with) (cons 'var (cons 'boolean req))
+		    (cons 'var (get-lines with (all-lines)
+					  (all-groups)))
+		    #|(cons 'var (cons 'boolean (get-lines with (all-lines)
+		    (all-groups))))|#))
+	    (excs (if (not excl) nil
+		    (get-lines excl (all-lines) (all-groups))))
+	    (lns (append req (except incs excs)))
+	    (old-v-of (expr-for-value-of))
+	    (new-e (new-val-of lns
+			       (cdr old-v-of)
+			       (all-lines)))
+	    ;; setting up hypotheses
+	    (contract-hyps (get-hyps start compl?))
+	    (hyps (include-all-vars (append contract-hyps hyps)
+				    (free-vars start))))
+       (eval `(defrel value-of (expr ρ o)
+		(conde . ,new-e)))
+       (get-tests hyps)
+       (suggest-lemma-loop 1 max new-forms hyps start (cdadr (@ result)) old-v-of)))))
 
 (defun all-lines ()
   (append 

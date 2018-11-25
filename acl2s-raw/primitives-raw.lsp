@@ -217,6 +217,19 @@ from the function.
    ((non-nilo e) (== o nil))
    ((== e nil) (== o t))))
 
+(defrel atomo (e)
+  (conde
+   ((numberpo e))
+   ((symbolpo e))
+   ((stringpo e))
+   ((charpo e))))
+
+(defrel atomo-fn (e o)
+  (conde
+   ((atomo e) (== o t))
+   ((conspo e) (== o nil))))
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; NEW NUMBER STUFF

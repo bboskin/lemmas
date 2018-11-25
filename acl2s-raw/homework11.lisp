@@ -102,7 +102,6 @@ definitions nicer later.
 (defttag t)
 (include-book "top" :uncertified-okp t)
 
-
 (defdata2 
   (expr (oneof integer 
                symbol 
@@ -114,10 +113,6 @@ definitions nicer later.
   (sq-expr  (list 'sq expr))
   (+-expr   (list expr '+ expr))
   (*-expr   (list expr '* expr)))
-
-(suggest-lemma (exprp e) :with exprp)
-(suggest-lemma (inc-exprp e) :with inc-exprp)
-(suggest-lemma (*-exprp e) :with *-exprp)
 
 #|
 
@@ -284,8 +279,8 @@ you have a valid definition and ACL2s can't prove it.
   :input-contract (and (symbolp x) (assignmentp alist))
   :output-contract (integerp (lookupvar x alist))
   (cond ((endp alist) 0)
-        ((equal (car (car alist)) x) (cdr (car alist)))
-        (t (lookupvar x (cdr alist)))))
+	((equal (caar alist) x) (cdar alist))
+	(t (lookupvar x (rest alist)))))
 
 (check= (lookupvar 'z '((x . 3) (y . 5) (z . 2))) 2)
 (check= (lookupvar 'a '((x . 3) (y . 5) (z . 2))) 0)
@@ -306,13 +301,12 @@ check what kind of expression we have.
   (cond
    ((integerp x) x)
    ((symbolp x) (lookupvar x alist))
-   ((inc-exprp x) (+ 1 (evaluate (car (cdr x)) alist)))
-   ((sq-exprp x) (expt (evaluate (car (cdr x)) alist) 2))
-   ((*-exprp x) (* (evaluate (car x) alist)
-                   (evaluate (car (cdr (cdr x))) alist)))
-   ;; Added a case for +
-   ((+-exprp x) (+ (evaluate (car x) alist)
-                   (evaluate (car (cdr (cdr x))) alist)))
+   ((inc-exprp x) (+ 1 (evaluate (second x) alist)))
+   ((sq-exprp x) (expt (evaluate (second x) alist) 2))
+   ((*-exprp x) (* (evaluate (first x) alist)
+                   (evaluate (third x) alist)))
+   ((+-exprp x) (+ (evaluate (first x) alist)
+                   (evaluate (third x) alist)))
    (t 0)))
 
 (check= (evaluate 3 '((a . 2))) 3)
@@ -432,9 +426,9 @@ their product.
   :output-contract (stackp (execute instr alist stk))
   (cond
    ((load-instrp instr)
-    (push-stack (lookupvar (car (cdr instr)) alist) stk))
+    (push-stack (lookupvar (second instr) alist) stk))
    ((push-instrp instr)
-    (push-stack (car (cdr instr)) stk))
+    (push-stack (second instr) stk))
    ((dup-instrp instr)
     (push-stack (top-stack stk) stk))
    ((add-instrp instr)
@@ -500,19 +494,19 @@ Now, define the  compiler.
   :input-contract (exprp x)
   :output-contract (programp (compile-expression x))
   (cond
-   ((integerp x) (cons (cons 'push (cons x nil)) nil))
-   ((symbolp x) (cons (cons 'load (cons x nil)) nil))
+   ((integerp x) (list (list 'push x)))
+   ((symbolp x) (list (list 'load x)))
    ((inc-exprp x)
-    (append (compile-expression (car (cdr x))) '((push 1) (add))))
+    (append (compile-expression (second x)) '((push 1) (add))))
    ((sq-exprp x)
-    (append (compile-expression (car (cdr x))) '((dup) (mul))))
+    (append (compile-expression (second x)) '((dup) (mul))))
    ((+-exprp x)
-    (append (compile-expression (car x)) 
-            (compile-expression (car (cdr (cdr x))))
+    (append (compile-expression (first x)) 
+            (compile-expression (third x))
             '((add))))
    (t 
-    (append (compile-expression (car x)) 
-            (compile-expression (car (cdr (cdr x))))
+    (append (compile-expression (first x)) 
+            (compile-expression (third x))
             '((mul))))))
 
 (check=
@@ -533,15 +527,21 @@ Now, define the  compiler.
 
 (suggest-lemma (m (append p1 p2) a s)
 	       :required-expressions (m p1 a s)
-	       :with compiler-fns)
+	       :with compiler-fns
+	       :num-trials 2)
 
 (test? (IMPLIES (AND (TRUE-LISTP P1)
-              (STACKP S)
-              (PROGRAMP (BINARY-APPEND P1 P2))
-              (ASSIGNMENTP A))
-         (EQUAL (M (APPEND P1 P2) A S)
-                (M P1 A S))))
+		     (STACKP S)
+		     (PROGRAMP (BINARY-APPEND P1 P2))
+		     (ASSIGNMENTP A))
+		(EQUAL (M (APPEND P1 P2) A S)
+		       (M P1 A S))))
 
+
+(suggest-lemma (m (append p1 p2) a s)
+	       :required-expressions p2 (m p1 a s) a
+	       :with compiler-fns
+	       :num-trials 10)
 
 (suggest-lemma (m (append p1 p2) a s)
 	       :required-expressions p2 a (m p1 a s)
@@ -567,6 +567,20 @@ Now, define the  compiler.
 		(ASSIGNMENTP A)
 		(PROGRAMP P1)
 		(PROGRAMP P2))
+	   (EQUAL (M (APPEND P1 P2) A S)
+		  (M P2 A (M P1 A S)))))
+
+(suggest-lemma (m (append p1 p2) a s)
+	       :required-expressions p2 a (m p1 a s)
+	       :with compiler-fns
+	       :complete-hyps nil
+	       :hyps (programp p1) (programp p2) (stackp s) (assignmentp a))
+
+(defthm m-append-dist2
+  (IMPLIES (AND (PROGRAMP P1)
+		(PROGRAMP P2)
+		(STACKP S)
+		(ASSIGNMENTP A))
 	   (EQUAL (M (APPEND P1 P2) A S)
 		  (M P2 A (M P1 A S)))))
 

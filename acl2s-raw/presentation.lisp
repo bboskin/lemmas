@@ -1,29 +1,6 @@
 (defttag t)
 (include-book "top" :uncertified-okp t)
 
-
-;; Show this to Pete
-(thm (IMPLIES (AND (TRUE-LISTP ACL2S::X)
-		   (OR (TRUE-LISTP (BINARY-APPEND ACL2S::X ACL2S::Y))
-		       (STRINGP (BINARY-APPEND ACL2S::X ACL2S::Y))))
-	      (EQUAL (REVERSE (APPEND ACL2S::X ACL2S::Y))
-		     (REVERSE (APPEND ACL2S::X ACL2S::Y)))))
-
-(test? (IMPLIES (AND (TRUE-LISTP ACL2S::X)
-		     (OR (TRUE-LISTP (BINARY-APPEND ACL2S::X ACL2S::Y))
-			 (STRINGP (BINARY-APPEND ACL2S::X ACL2S::Y))))
-		(EQUAL (REVERSE (APPEND ACL2S::X ACL2S::Y))
-		       (REVERSE (APPEND ACL2S::X ACL2S::Y)))))
-
-(IMPLIES (AND (TRUE-LISTP ACL2S::X)
-	      (OR (TRUE-LISTP (BINARY-APPEND ACL2S::X ACL2S::Y))
-		  (STRINGP (BINARY-APPEND ACL2S::X ACL2S::Y))))
-	 (EQUAL (REVERSE (APPEND ACL2S::X ACL2S::Y))
-		(REVERSE (APPEND ACL2S::X ACL2S::Y))))
-
-(suggest-lemma (reverse (append x y))
-	       :with reverse append)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Example 1: The exam lemma
 ;;;;;;;;;;;;;;;;;;;;;;;;;

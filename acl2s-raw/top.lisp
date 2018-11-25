@@ -69,19 +69,18 @@
 (defmacro suggest-lemma (form &rest args)
   `(suggest-lemma-inner ',form ',args))
 
-(defmacro defunc2 (name vars ic-ig ic oc-ig oc body)
+(defmacro defunc2 (name vars ic-ig ic oc-ig oc &rest body)
   (declare (ignore ic-ig oc-ig))
   `(progn!
-    (defunc2- ',name ',vars ',body state)
+    (defunc2- ',name ',vars (car (reverse ',body)) state)
     (defunc ,name ,vars
       :input-contract ,ic
       :output-contract ,oc
-      ,body)))
+      . ,body)))
 
 (defmacro defdata2 (&rest exprs)
   `(progn!
-    (defdata2- ',exprs ;state
-      )
+    (defdata2- ',exprs)
     (defdata . ,exprs)))
 
 (defmacro defgroup (name &rest args)
