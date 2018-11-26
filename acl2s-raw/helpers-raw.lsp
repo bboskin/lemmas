@@ -115,8 +115,8 @@
    ((consp v)
     (let ((tag (car v)))
       (cond
-       ((equal tag 'INTERNAL-SYMBOL) (cadr v))
-       ((equal tag 'INTERNAL-VARSYMBOL) (cadr v))
+       ((equal tag 'INTERNAL-SYMBOL) `',(cadr v))
+       ((equal tag 'INTERNAL-VARSYMBOL) `',(cadr v))
        ((equal tag 'INTERNAL-CHAR) (cadr v))
        ((equal tag 'INTERNAL-NUMBER) (read-back-num v))
        ((equal tag 'INTERNAL-STRING) (read-back-string (cdr v)))

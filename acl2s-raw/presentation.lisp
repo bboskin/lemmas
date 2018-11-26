@@ -10,8 +10,8 @@
   :output-contract (booleanp (in x ls))
   (cond
    ((endp ls) nil)
-   ((equal x (car ls)) t)
-   (t (in x (cdr ls)))))
+   ((equal x (first ls)) t)
+   (t (in x (rest ls)))))
 
 (defunc2 nodups (ls)
   :input-contract (true-listp ls)
@@ -103,23 +103,205 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defdata flat-input
-  (oneof (cons flat-input flat-input) integer boolean character))
+  (oneof (cons flat-input flat-input) rational boolean character string))
 
 (defunc2 flatten (x)
-  :input-contract (flat-inputp x)
+  :input-contract t ;(flat-inputp x)
   :output-contract (true-listp (flatten x))
-  (cond ((not (consp x)) (cons x nil))
+  (cond ((atom x) (cons x nil))
         (t (append (flatten (car x)) (flatten (cdr x))))))
 
 (defunc2 mc-flatten-acc (x a)
-  :input-contract (and (flat-inputp x) (true-listp a))
+  :input-contract (true-listp a)
   :output-contract (true-listp (mc-flatten-acc x a))
-  (cond ((not (consp x)) (cons x a))
+  (cond ((atom x) (cons x a))
         (t (mc-flatten-acc (car x)
                            (mc-flatten-acc (cdr x) a)))))
 
 (suggest-lemma (mc-flatten-acc a l)
-	       :with flatten append)
+	       :with flatten append
+	       :hyps (flat-inputp a))
+
+;; Doesn't go through, we'd need to provide an induction scheme
+
+(defthm flatten-acc-flatten
+  (IMPLIES (AND (TRUE-LISTP L) (FLAT-INPUTP A))
+	   (EQUAL (MC-FLATTEN-ACC A L)
+		  (APPEND (FLATTEN A) L))))
+
+;;
+
+(defunc2 gopher-meas (x)
+  :input-contract t
+  :output-contract (natp (gopher-meas x))
+  (cond
+   ((atom x) 0)
+   ((atom (car x)) 0)
+   (t (+ 1 (gopher-meas (car x))))))
+
+(defthm lg-dec
+  (implies (and (consp e)
+		(consp (car e)))
+	   (< (gopher-meas (cons (caar e)
+				 (cons (cdar e) (cdr e))))
+	      (gopher-meas e))))
+
+(set-termination-method :measure)
+(defunc2 gopher (x)
+  :input-contract t
+  :output-contract t
+  (declare (xargs :measure (gopher-meas x)))
+  (if (or (atom x)
+          (atom (car x)))
+      x
+    (gopher (cons (caar x) (cons (cdar x) (cdr x))))))
+
+(suggest-lemma (flatten (gopher x))
+	       :with flatten gopher
+	       :hyps (flat-inputp x))
+
+(defthm flatten-gopher
+  (IMPLIES (AND (FLAT-INPUTP (GOPHER X))
+		(FLAT-INPUTP X))
+         (EQUAL (FLATTEN (GOPHER X))
+                (FLATTEN X))))
+
+;;;;
+
+(defunc2 count-all (x)
+  :input-contract t
+  :output-contract (natp (count-all x))
+  (cond ((atom x) 1)
+        ((consp x)
+	 (+ 1 (count-all (car x))
+	    (count-all (cdr x))))))
+
+(defgroup flatten-like flatten gopher count-all)
+
+;; Theorems needed for the termination argument
+(suggest-lemma (count-all (gopher x))
+	       :with flatten-like)
+
+(defthm gopher-count-all-eq
+  (EQUAL (COUNT-ALL (GOPHER X))
+	 (COUNT-ALL X)))
+
+(suggest-lemma t
+	       :required-expressions (gopher x)
+	       :with flatten-like car atom
+	       :hyps (not (atom x)))
+
+(defthm gopher-first-atom
+  (IMPLIES (NOT (ATOM X))
+	   (ATOM (CAR (GOPHER X)))))
+
+(suggest-lemma (count-all x)
+	       :with flatten-like + - number
+	       :hyps (atom x))
+
+(defthm count-all-atom
+  (IMPLIES (ATOM X)
+	   (EQUAL (COUNT-ALL X) 1)))
+
+
+;; This one surprised me
+(suggest-lemma (count-all (cdr (gopher x)))
+	       :required-expressions (gopher x)
+	       :with flatten-like - number
+	       :hyps (not (atom x))
+	       :complete-hyps nil)
+
+(defthm gopher-rest-count-all
+  (IMPLIES (NOT (ATOM X))
+	   (EQUAL (COUNT-ALL (CDR (GOPHER X)))
+		  (- (COUNT-ALL (GOPHER X)) 2))))
+
+(defthm gopher-rest-count-all-less
+  (<= (count-all (cdr (gopher x))) (count-all (gopher x))))
+
+
+(defthm gopher-rest-count-all-less
+  (<= (count-all (cdr (gopher x)))
+      (count-all (gopher x))))
+
+(suggest-lemma t
+	       :required-expressions (gopher x)
+	       :with flatten-like listp
+	       :hyps (listp x))
+
+(defthm goph-list
+  (IMPLIES (LISTP X) (LISTP (GOPHER X))))
+
+(defunc samefringe-measure (x y)
+  :input-contract t
+  :output-contract (natp (samefringe-measure x y))
+  (cond ((or (atom x) (atom y)) 0)
+        ((not (equal (car (gopher x)) (car (gopher y)))) 0)
+        (t (+ 1 (count-all (cdr (gopher x))) (count-all (cdr (gopher y)))))))
+
+(set-termination-method :measure)
+
+(defunc2 samefringe (x y)
+  :input-contract t
+  :output-contract (booleanp (samefringe x y))
+  (declare (xargs :measure (samefringe-measure x y)))
+  (if (or (atom x) (atom y))
+      (equal x y)
+    (and (equal (car (gopher x))
+                (car (gopher y)))
+         (samefringe (cdr (gopher x))
+                     (cdr (gopher y))))))
+
+(defunc2 first* (e)
+  :input-contract t
+  :output-contract (atom (first* e))
+  (cond
+   ((atom e) e)
+   ((atom (car e)) (car e))
+   (t (first* (car e)))))
+
+(defgroup group
+  gopher flatten first* samefringe)
+
+(suggest-lemma (first* e)
+	       :required-expressions (gopher e)	       
+	       :with group)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Question from 2800 Homework 10
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defunc2 zip-list (x y)
+  :input-contract (and (true-listp x) (true-listp y))
+  :output-contract (true-listp (zip-list x y))
+  (if (or (endp x) (endp y))
+    nil
+    (cons (list (first x) (first y))
+          (zip-list (rest x) (rest y)))))
+
+(defunc2 zip-list-t (x y acc)
+  :input-contract (and (true-listp x) (true-listp y) (true-listp acc))
+  :output-contract (true-listp (zip-list-t x y acc))
+  (if (or (endp x) (endp y))
+    (rev* acc)
+    (zip-list-t (rest x) (rest y) (cons (list (first x) (first y)) acc))))
+
+(defunc2 zip-list* (x y)
+  :input-contract (and (true-listp x) (true-listp y))
+  :output-contract (true-listp (zip-list* x y))
+  (zip-list-t x y nil))
+
+(suggest-lemma (zip-list-t x y acc)
+	       :required-expressions (zip-list x y)
+	       :with reverse append zip-list)
+
+(defthm zip-list-t-zip-list
+ (IMPLIES (AND (TRUE-LISTP X)
+	       (TRUE-LISTP Y)
+	       (TRUE-LISTP ACC))
+	  (EQUAL (ZIP-LIST-T X Y ACC)
+		 (APPEND (REVERSE ACC) (ZIP-LIST X Y)))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Quicksort and Insertion sort
@@ -132,56 +314,57 @@
   :output-contract (booleanp (orderedp ls))
   (cond
    ((endp ls) t)
-   ((endp (cdr ls)) t)
-   ((<= (car ls) (car (cdr ls)))
-    (orderedp (cdr ls)))
+   ((endp (rest ls)) t)
+   ((<= (first ls) (second ls))
+    (orderedp (rest ls)))
    (t nil)))
 
-(defunc2 my-remove (x ls)
+(defunc2 del (x ls)
   :input-contract (loip ls)
-  :output-contract (loip (my-remove x ls))
+  :output-contract (loip (del x ls))
   (cond
    ((endp ls) nil)
-   ((equal x (car ls)) (cdr ls))
-   (t (cons (car ls) (my-remove x (cdr ls))))))
+   ((equal x (first ls)) (rest ls))
+   (t (cons (first ls) (del x (rest ls))))))
 
 (defunc2 perm (l1 l2)
   :input-contract (and (loip l1) (loip l2))
   :output-contract (booleanp (perm l1 l2))
   (cond
    ((endp l1) (endp l2))
-   ((in (car l1) l2)
-    (perm (cdr l1) (my-remove (car l1) l2)))
+   ((in (first l1) l2)
+    (perm (rest l1) (del (first l1) l2)))
    (t nil)))
-
-;; TODO -> add 'list' macro to compiler/interpreter (and cadr, etc.?)
 
 (defunc2 insert (x ls)
   :input-contract (and (integerp x) (loip ls))
   :output-contract (loip (insert x ls))
   (cond
-   ((endp ls) (cons x nil))
-   ((<= x (car ls)) (cons x ls))
-   (t (cons (car ls) (insert x (cdr ls))))))
+   ((endp ls) (list x))
+   ((<= x (first ls)) (cons x ls))
+   (t (cons (first ls) (insert x (rest ls))))))
 
 (defunc2 isort (ls)
   :input-contract (loip ls)
   :output-contract (loip (isort ls))
   (cond
    ((endp ls) nil)
-   (t (insert (car ls) (isort (cdr ls))))))
+   (t (insert (first ls) (isort (rest ls))))))
 
 (defgroup sorting-fns orderedp perm insert isort boolean)
 
 (suggest-lemma (isort ls1)
+	       :with sorting-fns
 	       :hyps (loip ls2) (orderedp ls2) (perm ls1 ls2))
 
-;; At first this doesn't go through
+;; This doesn't go through
 
-(defthm isort-ordered
-  (IMPLIES (AND (LOIP LS)
-		(LOIP (ISORT LS)))
-	   (EQUAL (ORDEREDP (ISORT LS)) T)))
+(thm (IMPLIES (AND (LOIP LS1)
+		   (LOIP LS2)
+		   (ORDEREDP LS2)
+		   (PERM LS1 LS2))
+	      (EQUAL (ISORT LS1) LS2)))
+
 
 (suggest-lemma (orderedp (insert x ls))
 	       :with sorting-fns)
@@ -208,6 +391,13 @@
 	       :hyps (and (loip ls) (integerp x))
 	       :with sorting-fns)
 
+(defthm perm-cons
+  (IMPLIES (AND (LOIP LS) (INTEGERP X))
+         (PERM (CONS X LS) (INSERT X LS))))
+
+(defthm isort-perm
+  (IMPLIES (AND (LOIP LS) (LOIP (ISORT LS)))
+	   (PERM LS (ISORT LS))))
 
 ;;;;;;;;;;;;;;;;;
 ;; Now, quicksort

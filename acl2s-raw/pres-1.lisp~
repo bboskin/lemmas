@@ -1,0 +1,2 @@
+(defttag t)
+(include-book "lemma-synth" :uncertified-okp t)
