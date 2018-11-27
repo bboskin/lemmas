@@ -75,9 +75,9 @@
 	       :required-expressions (append x y)
 	       :with exam-fns
 	       :complete-hyps nil
-	       :hyps (true-listp x) (true-listp y) (in a y))
+	       :hyps (true-listp x) (true-listp y) (in a y) (integerp b))
 
-(defthm foo
+(defthm in-in-cons
   (IMPLIES (AND (TRUE-LISTP X)
               (TRUE-LISTP Y)
               (IN A Y))
@@ -105,3 +105,12 @@
 		(NODUPS ACC))
 	   (EQUAL (REMDUPST LS ACC)
 		  (REMDUPS (APPEND (REVERSE LS) ACC)))))
+
+
+
+;;; Also, a serious flaw:
+;; By re-ordering the hints, it takes forever
+(suggest-lemma (remdupst ls acc)
+	       :required-expressions append reverse remdups
+	       :with exam-fns
+	       :hyps (nodups acc))

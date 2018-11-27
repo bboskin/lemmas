@@ -26,30 +26,10 @@
 	   (xargs :stobjs state))
   (mv nil (acl2::raise "Wrong version of defunc2- is being called") state))
 
-(acl2::define defdata2- ((exprs true-listp) ;state
-			 )
-  :returns (nil); (mv a b state)
-  (declare (ignore exprs)
-	   ;(xargs :stobjs state)
-	   )
+(acl2::define defdata2- ((exprs true-listp))
+  :returns (nil)
+  (declare (ignore exprs))
   (acl2::raise "Wrong version of defdata2- is being called"))
-
-#|
-
-(acl2::define get-tests ((form true-listp))
-  :returns (nil)
-  (declare (ignore form))
-  (acl2::raise "wrong"))
-(acl2::define get-final (form from to)
-  :returns (nil)
-  (declare (ignore form form to))
-  (acl2::raise "wrong"))
-
-(acl2::define by-hand-rational-enum ((n natp))
-  :returns (nil)
-  (declare (ignore n))
-  (acl2::raise "wrong"))
-|#
 
 (acl2::include-raw "to-acl2-raw.lsp" :do-not-compile t)
 (acl2::include-raw "helpers-raw.lsp" :do-not-compile t)
@@ -68,8 +48,6 @@
 
 (defmacro suggest-lemma (form &rest args)
   `(suggest-lemma-inner ',form ',args))
-
-
 
 (defmacro defunc2 (name vars ic-ig ic oc-ig oc &rest body)
   (declare (ignore ic-ig oc-ig))

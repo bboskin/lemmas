@@ -57,7 +57,7 @@
    ((endp ls) nil)
    (t (insert (first ls) (isort (rest ls))))))
 
-(defgroup sorting-fns orderedp perm insert isort)
+(defgroup sorting-fns orderedp perm in del insert isort)
 
 ;; Some interesting properties that we can find,
 ;; which don't immediately go through
@@ -133,7 +133,9 @@
 
 ;;;;;;;;;;;;;;;
 ;; first key qsort-isort lemma
-
+(suggest-lemma (isort (less x ls))
+	       :required-expressions less (isort ls)
+	       :with sorting-fns)
 ;; helper 1
 (suggest-lemma (less a (insert b ls))
 	       :required-expressions less
@@ -152,7 +154,7 @@
 
 ;; helper 2
 (suggest-lemma (less a (insert b ls))
-	       :required-expressions (insert b (less a ls))
+	       :required-expressions (less a ls)
 	       :with sorting-fns
 	       :complete-hyps nil
 	       :hyps (integerp a) (integerp b) (<= b a) (loip ls) (orderedp ls))
@@ -181,8 +183,8 @@
 ;;;;;;;;;;;;;;;;;;
 ;; second key qsort-isort lemma
 (suggest-lemma (isort (notless x ls))
-	       :required-expressions (isort ls)
-	       :with notless)
+	       :required-expressions notless (isort ls)
+	       :with sorting-fns)
 
 ;; helper 1
 (suggest-lemma (notless a (insert b ls))
@@ -202,7 +204,7 @@
 
 ;; helper 2
 (suggest-lemma (notless a (insert b ls))
-	       :required-expressions (insert b (notless a ls))
+	       :required-expressions (notless a ls)
 	       :with sorting-fns
 	       :complete-hyps nil
 	       :hyps (integerp a) (integerp b) (> b a) (loip ls) (orderedp ls))
@@ -219,7 +221,7 @@
 
 ;; Lemma 2
 (suggest-lemma (isort (notless x ls))
-	       :required-expressions (isort ls) x
+	       :required-expressions (isort ls)
 	       :with notless
 	       :complete-hyps nil
 	       :hyps (loip ls) (integerp x))
@@ -228,8 +230,6 @@
   (IMPLIES (AND (LOIP LS) (INTEGERP X))
          (EQUAL (ISORT (NOTLESS X LS))
                 (NOTLESS X (ISORT LS)))))
-
-
 
 
 (defunc2 get-before (x ls)
@@ -251,7 +251,14 @@
 (add-to-group sorting-fns get-before get-after)
 
 (suggest-lemma (less a x)
-	       :required-expressions (get-before a x)
+	       :required-expressions get-before
+	       :with sorting-fns
+	       :exclude less
+	       :hyps (orderedp x))
+
+;; If we really want to be minimal
+(suggest-lemma (less a x)
+	       ;:required-expressions get-before
 	       :with sorting-fns
 	       :exclude less
 	       :hyps (orderedp x))
@@ -262,7 +269,7 @@
 
 
 (suggest-lemma (notless a x)
-	       :required-expressions (get-after a x)
+	       :required-expressions get-after
 	       :with sorting-fns
 	       :exclude notless
 	       :hyps (orderedp x))

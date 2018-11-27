@@ -109,6 +109,14 @@
 
 ;;; Takes synthesized expressions, and removes evidence
 ;; of internal values
+
+(defun read-back-string (str)
+  (cond
+   ((equal str '()) "")
+   (t (concatenate 'string
+		   (make-string 1 :initial-element (car str))
+		   (read-back-string (cdr str))))))
+
 (defun read-back (v)
   (cond
    ((symbolp v) v)

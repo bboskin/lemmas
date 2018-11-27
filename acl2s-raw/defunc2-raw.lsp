@@ -84,12 +84,12 @@
   (let ((new-clause (new-clause num-args nil `(list ',name) nil `(,rel-name)))
 	(new-arity-clause (has-arity-clause name num-args))
 	(current-interp (expr-for-value-of))
-	(current-lines (all-lines))
+	(current-lines (all-forms))
 	(current-arities (expr-for-has-arity)))
     (progn
       (defun expr-for-value-of ()
 	(append current-interp (list new-clause)))
-      (defun all-lines ()
+      (defun all-forms ()
 	(append current-lines (list name)))
       (defun expr-for-has-arity ()
 	(append current-arities (list new-arity-clause)))
@@ -100,7 +100,7 @@
 	       ,(expr-for-has-arity))))))
 
 ;; for some reason I keep needing to redefine this
-(defun all-lines ()
+(defun all-forms ()
   (append 
    '(var boolean symbol number string char cons car cdr let if cond)
    (mapcar #'car lemma-built-ins)))

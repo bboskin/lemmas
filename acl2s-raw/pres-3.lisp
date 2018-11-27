@@ -249,13 +249,13 @@ data definitions.
 
 #|Now, we have some theorems to prove|#
 
-(defgroup compiler-fns m push-stack evaluate compile-expressions)
+(defgroup compiler-fns m push-stack evaluate compile-expression)
 
-(suggest-lemma (m (append p1 p2) a s)
-	       :required-expressions m (m p1 a s)
+(suggest-lemma (m (append p1 p2) a stk)
+	       :required-expressions m p2 (m p1 a stk)
 	       :complete-hyps nil
 	       :with compiler-fns
-	       :hyps (programp p1) (programp p2) (stackp s) (assignmentp a))
+	       :hyps (programp p1) (programp p2) (stackp stk) (assignmentp a))
 
 (defthm m-append-dist
   (IMPLIES (AND (PROGRAMP P1)

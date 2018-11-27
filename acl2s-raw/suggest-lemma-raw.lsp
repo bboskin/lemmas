@@ -230,9 +230,6 @@ The keywords for suggest-lemma are:
 (defun final-test (hyps from to)
   (let ((state *the-live-state*))
     (progn!
-     (print "form tested")
-     (print `(implies ,hyps (equal ,from ,to)))
-     
      (acl2::ld `((mv-let
 		  (cx? v state)
 		  (acl2s::itest? (implies ,hyps (equal ,from ,to)))
@@ -285,11 +282,7 @@ The keywords for suggest-lemma are:
 	   (new-tests (mapcar #'clean-tests cleaned-tests))
 	   (results (mapcar #'clean-val
 			    (eval-all start cleaned-tests))))
-      (print "testing:")
-      (print `(find-equivalent ',forms
-			       q
-			       ',new-tests
-			       ',results))
+      (print "Beginning another round of synthesis. If this takes a long time, consider adding more :required-expressions or hypotheses!")
       (let ((form
 	     (read-back
 	      (eval `(car (run 1 q (find-equivalent ',forms
@@ -311,7 +304,9 @@ The keywords for suggest-lemma are:
 		    "Try adding more hypotheses, or giving extra hints"
 		    "Here's the best thing I could find:")
 	      (final-statement/no-print hyps start form)))
-	   (t (suggest-lemma-loop (+ i 1) max forms hyps start
+	   (t (print "Our best answer so far is:")
+	      (print `(implies ,hyps (equal ,start ,form)))
+	      (suggest-lemma-loop (+ i 1) max forms hyps start
 				  (append (cdadr (@ result)) tests) old-v-of))))))))
 
 (defun suggest-lemma-inner (start xargs)
@@ -321,19 +316,17 @@ The keywords for suggest-lemma are:
      (parse-xargs xargs nil nil nil nil t 5)
      (let* (;;setting up the evaluator
 	    (new-forms (clean-expr forms))
-	    (req (get-lines new-forms (all-lines) (all-groups)))
+	    (req (get-lines new-forms (all-forms) (all-groups)))
 	    (incs (if (not with) (cons 'var (cons 'boolean req))
-		    (cons 'var (get-lines with (all-lines)
-					  (all-groups)))
-		    #|(cons 'var (cons 'boolean (get-lines with (all-lines)
-		    (all-groups))))|#))
+		    (cons 'var (get-lines with (all-forms)
+					  (all-groups)))))
 	    (excs (if (not excl) nil
-		    (get-lines excl (all-lines) (all-groups))))
+		    (get-lines excl (all-forms) (all-groups))))
 	    (lns (append req (except incs excs)))
 	    (old-v-of (expr-for-value-of))
 	    (new-e (new-val-of lns
 			       (cdr old-v-of)
-			       (all-lines)))
+			       (all-forms)))
 	    ;; setting up hypotheses
 	    (contract-hyps (get-hyps start compl?))
 	    (hyps (include-all-vars (append contract-hyps hyps)
@@ -343,12 +336,12 @@ The keywords for suggest-lemma are:
        (get-tests hyps)
        (suggest-lemma-loop 1 max new-forms hyps start (cdadr (@ result)) old-v-of)))))
 
-(defun all-lines ()
+(defun all-forms ()
   (append 
    '(var boolean symbol number string char cons car cdr let if cond)
    (mapcar #'car lemma-built-ins)))
 
-(defun all-groups () '(all-lines))
+(defun all-groups () '(all-forms))
       
 ;; organizing expression forms into groups
 

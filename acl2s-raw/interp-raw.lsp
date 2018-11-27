@@ -104,7 +104,7 @@
     ;; everything else -- standard recursion & completion
     . ,(mapcar #'make-init-value-of-clause lemma-built-ins)))
 
-(defun all-lines ()
+(defun all-forms ()
   (append 
    '(var boolean symbol number string char cons car cdr let if cond)
    (mapcar #'car lemma-built-ins)))
@@ -137,8 +137,8 @@
        ,(expr-for-value-of))
      (defrel has-arity (form n)
        ,(expr-for-has-arity))
-     (defun all-lines ()
-       ',(all-lines))))
+     (defun all-forms ()
+       ',(all-forms))))
 
 (reset-interp)
 

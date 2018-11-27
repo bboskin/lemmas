@@ -203,10 +203,11 @@
   `(fresh-help ,xs ,gs))
 
 (defmacro defrel (name xs &rest gs)
-  `(acl2::defun ,name ,xs
-		(lambda (s)
-		  (lambda ()
-		    (apply (conj ,gs) (list s))))))
+  (let ((s (gensym)))
+    `(acl2::defun ,name ,xs
+		  (lambda (,s)
+		    (lambda ()
+		      (apply (conj ,gs) (list ,s)))))))
 
 (defmacro run* (q &rest gs)
   `(run nil ,q . ,gs))

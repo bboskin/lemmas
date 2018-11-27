@@ -138,8 +138,15 @@ from the function.
 
 ;; List primitives: cons, car, cdr, endp, consp
 (defrel conso (a d o) (== o `(INTERNAL-CONS ,a ,d)))
-(defrel caro (pr a) (fresh (d) (conso a d pr)))
-(defrel cdro (pr d) (fresh (a) (conso a d pr)))
+(defrel caro (pr a)
+  (conde
+   ((== pr nil) (== a nil))
+   ((fresh (d) (conso a d pr)))))
+
+(defrel cdro (pr d)
+  (conde
+   ((== pr nil) (== d nil))
+   ((fresh (a) (conso a d pr)))))
 
 (defrel endpo (e) (== e '()))
 (defrel endpo-fn (e o)
@@ -631,14 +638,6 @@ from the function.
 
 (defun build-string (str)
   `(INTERNAL-STRING . ,(build-string-inner str)))
-
-(defun read-back-string (str)
-  (cond
-   ((equal str '()) "")
-   (t (concatenate 'string
-		   (make-string 1 :initial-element (car str))
-		   (read-back-string (cdr str))))))
-
 
 (defun build-char (c)
   `(INTERNAL-CHAR ,c))

@@ -148,20 +148,6 @@
 	     `(,test ,@negations ,(miniKanrenize (cadr line1) dest))
 	     (miniKanrenize-cond (cdr lines) (cons test-neg negations) dest))
 	  `(((fail))))))))
-#|
-;; faster, less precise alternative
-(defun miniKanrenize-cond (lines dest)
-  (cond
-   ((endp lines) `(((== ,dest nil))))
-   (t (let* ((line1 (car lines))
-	     (test (miniKanrenize-bool (car line1))))
-	(if line1
-	    (cons
-	     `(,test ,(miniKanrenize (cadr line1) dest))
-	     (miniKanrenize-cond (cdr lines) dest))
-	  `(((fail))))))))
-|#
-
 
 (defun miniKanrenize-if (expr dest)
   (let ((test (cadr expr))
